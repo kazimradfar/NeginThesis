@@ -15,6 +15,7 @@ Standard library only. It runs offline and needs no API key.
 Usage (from the repository root):
     python harness/check_thesis.py
     python harness/check_thesis.py --out harness/report.md
+    python harness/check_thesis.py --lang fa --out harness/report.fa.md   # Persian report
     python harness/check_thesis.py --docx "path/to/draft.docx" --ris "path/to/refs.ris"
 
 Exit code: 1 if a citation points to a missing reference (or, with --strict,
@@ -247,74 +248,144 @@ def errors_and_warnings(result):
 
 
 # --------------------------------------------------------------------------
-# Report
+# Report (English and Persian)
 # --------------------------------------------------------------------------
-def _status(count):
-    return "OK" if count == 0 else f"CHECK ({count})"
+STRINGS = {
+    "en": {
+        "title": "Thesis check report",
+        "refs_draft": "Reference entries in the draft",
+        "refs_ris": "Entries in the RIS export",
+        "not_checked": "not checked",
+        "marks": "Citation marks found in the text: **{marks}** "
+                 "(covering {distinct} different references)",
+        "th": ("Check", "Result"),
+        "ok": "OK",
+        "check": "CHECK ({n})",
+        "front": "(front matter)",
+        "row_missing": "Citations pointing to a missing reference (error)",
+        "row_uncited": "References never cited",
+        "row_order": "References first cited out of order",
+        "row_gaps": "Gaps in the reference numbering",
+        "row_dups": "Duplicate reference entries",
+        "row_count": "Draft and RIS have the same number of entries",
+        "row_ris_missing": "RIS entries not found in the draft's list",
+        "row_draft_missing": "Draft references not found in the RIS",
+        "row_placeholders": "Unresolved [TO BE CONFIRMED] markers",
+        "row_expected": "Paragraphs still marked as expected values",
+        "sec_missing": "Citations pointing to a missing reference",
+        "ln_missing": "- ({n}) is cited but there is no reference {n}",
+        "sec_uncited": "References never cited",
+        "sec_order": "References first cited out of order",
+        "ln_order": "- Reference {n} is first cited after reference {m} ({sec})",
+        "sec_gaps": "Gaps in the reference numbering",
+        "sec_dups": "Possible duplicate references",
+        "ln_dups": "- Entries {a} and {b} look nearly identical",
+        "sec_ris_missing": "RIS entries not found in the draft's list",
+        "sec_draft_missing": "Draft references not found in the RIS",
+        "sec_placeholders": "Unresolved [TO BE CONFIRMED] markers",
+        "sec_expected": "Still marked as expected values (replace with measured data)",
+    },
+    "fa": {
+        "title": "گزارش بررسی پایان‌نامه",
+        "refs_draft": "تعداد منابع در پیش‌نویس",
+        "refs_ris": "تعداد منابع در فایل RIS",
+        "not_checked": "بررسی نشد",
+        "marks": "ارجاع‌های موجود در متن: **{marks}** (مربوط به {distinct} منبع متفاوت)",
+        "th": ("بررسی", "نتیجه"),
+        "ok": "بدون مشکل",
+        "check": "نیاز به بررسی ({n})",
+        "front": "(صفحات ابتدایی)",
+        "row_missing": "ارجاع به منبعی که وجود ندارد (خطا)",
+        "row_uncited": "منابعی که در متن ارجاع داده نشده‌اند",
+        "row_order": "منابعی که ترتیب اولین ارجاعشان به‌هم ریخته است",
+        "row_gaps": "جاافتادگی در شماره‌گذاری منابع",
+        "row_dups": "منابع تکراری",
+        "row_count": "تعداد منابع پیش‌نویس و RIS یکسان است",
+        "row_ris_missing": "منابع RIS که در فهرست پیش‌نویس نیستند",
+        "row_draft_missing": "منابع پیش‌نویس که در RIS نیستند",
+        "row_placeholders": "موارد [TO BE CONFIRMED] حل‌نشده",
+        "row_expected": "بخش‌هایی که هنوز مقدار مورد انتظار دارند",
+        "sec_missing": "ارجاع به منبع ناموجود",
+        "ln_missing": "- ارجاع ({n}) داده شده اما منبع شماره {n} وجود ندارد",
+        "sec_uncited": "منابع بدون ارجاع در متن",
+        "sec_order": "منابعی که ترتیب اولین ارجاعشان به‌هم ریخته است",
+        "ln_order": "- منبع {n} پس از منبع {m} برای اولین بار ارجاع داده شده است ({sec})",
+        "sec_gaps": "جاافتادگی در شماره‌گذاری منابع",
+        "sec_dups": "منابع احتمالاً تکراری",
+        "ln_dups": "- منابع {a} و {b} تقریباً یکسان هستند",
+        "sec_ris_missing": "منابع RIS که در فهرست پیش‌نویس پیدا نشدند",
+        "sec_draft_missing": "منابع پیش‌نویس که در RIS پیدا نشدند",
+        "sec_placeholders": "موارد [TO BE CONFIRMED] حل‌نشده",
+        "sec_expected": "هنوز مقدار مورد انتظار دارند (باید با داده‌های اندازه‌گیری‌شده جایگزین شوند)",
+    },
+}
 
 
-def render(result):
-    r = result
-    lines = ["# Thesis check report", ""]
-    lines += [
-        f"- Reference entries in the draft: **{r['n_references']}**",
-        f"- Entries in the RIS export: **{r['n_ris'] if r['n_ris'] is not None else 'not checked'}**",
-        f"- Citation marks found in the text: **{r['n_citation_marks']}** "
-        f"(covering {len(r['cited_numbers'])} different references)",
+def render(result, lang="en"):
+    """Render the Markdown report. Section names from the thesis stay in English."""
+    r, T = result, STRINGS[lang]
+
+    def status(count):
+        return T["ok"] if count == 0 else T["check"].format(n=count)
+
+    ris_count = r["n_ris"] if r["n_ris"] is not None else T["not_checked"]
+    lines = [
+        f"# {T['title']}", "",
+        f"- {T['refs_draft']}: **{r['n_references']}**",
+        f"- {T['refs_ris']}: **{ris_count}**",
+        "- " + T["marks"].format(marks=r["n_citation_marks"], distinct=len(r["cited_numbers"])),
         "",
-        "| Check | Result |",
+        f"| {T['th'][0]} | {T['th'][1]} |",
         "|---|---|",
-        f"| Citations pointing to a missing reference (error) | {_status(len(r['missing']))} |",
-        f"| References never cited | {_status(len(r['uncited']))} |",
-        f"| References first cited out of order | {_status(len(r['out_of_order']))} |",
-        f"| Gaps in the reference numbering | {_status(len(r['gaps']))} |",
-        f"| Duplicate reference entries | {_status(len(r['duplicates']))} |",
     ]
+
+    def row(key, count):
+        lines.append(f"| {T['row_' + key]} | {status(count)} |")
+
+    row("missing", len(r["missing"]))
+    row("uncited", len(r["uncited"]))
+    row("order", len(r["out_of_order"]))
+    row("gaps", len(r["gaps"]))
+    row("dups", len(r["duplicates"]))
     if r["n_ris"] is not None:
-        count_mismatch = 0 if r["n_ris"] == r["n_references"] else 1
-        lines += [
-            f"| Draft and RIS have the same number of entries | {_status(count_mismatch)} |",
-            f"| RIS entries not found in the draft's list | {_status(len(r['ris_missing_in_draft']))} |",
-            f"| Draft references not found in the RIS | {_status(len(r['draft_missing_in_ris']))} |",
-        ]
-    lines += [
-        f"| Unresolved [TO BE CONFIRMED] markers | {_status(len(r['placeholders']))} |",
-        f"| Paragraphs still marked as expected values | {_status(len(r['expected']))} |",
-        "",
-    ]
+        row("count", 0 if r["n_ris"] == r["n_references"] else 1)
+        row("ris_missing", len(r["ris_missing_in_draft"]))
+        row("draft_missing", len(r["draft_missing_in_ris"]))
+    row("placeholders", len(r["placeholders"]))
+    row("expected", len(r["expected"]))
+    lines.append("")
 
     def section(title, rows):
         if rows:
             lines.extend([f"## {title}", ""] + rows + [""])
 
-    section("Citations pointing to a missing reference",
-            [f"- ({n}) is cited but there is no reference {n}" for n in r["missing"]])
-    section("References never cited",
-            [f"- {n}. {r['references'][n][:110]}" for n in r["uncited"]])
-    section("References first cited out of order",
-            [f"- Reference {n} is first cited after reference {m} ({sec})"
-             for n, m, sec in r["out_of_order"]])
-    section("Gaps in the reference numbering", [f"- {n}" for n in r["gaps"]])
-    section("Possible duplicate references",
-            [f"- Entries {a} and {b} look nearly identical" for a, b in r["duplicates"]])
-    section("RIS entries not found in the draft's list", [f"- {t}" for t in r["ris_missing_in_draft"]])
-    section("Draft references not found in the RIS",
-            [f"- {n}. {r['references'][n][:110]}" for n in r["draft_missing_in_ris"]])
+    refs = r["references"]
+    section(T["sec_missing"], [T["ln_missing"].format(n=n) for n in r["missing"]])
+    section(T["sec_uncited"], [f"- {n}. {refs[n][:110]}" for n in r["uncited"]])
+    section(T["sec_order"], [T["ln_order"].format(n=n, m=m, sec=sec)
+                             for n, m, sec in r["out_of_order"]])
+    section(T["sec_gaps"], [f"- {n}" for n in r["gaps"]])
+    section(T["sec_dups"], [T["ln_dups"].format(a=a, b=b) for a, b in r["duplicates"]])
+    section(T["sec_ris_missing"], [f"- {t}" for t in r["ris_missing_in_draft"]])
+    section(T["sec_draft_missing"], [f"- {n}. {refs[n][:110]}" for n in r["draft_missing_in_ris"]])
 
     if r["placeholders"]:
         by_section = {}
         for sec, marker in r["placeholders"]:
-            by_section.setdefault(sec, []).append(marker)
+            by_section.setdefault(sec.replace("(front matter)", T["front"]), []).append(marker)
         rows = []
         for sec, markers in by_section.items():
             rows.append(f"**{sec}** ({len(markers)})")
             rows += [f"- {m[:140]}" for m in markers]
             rows.append("")
-        section("Unresolved [TO BE CONFIRMED] markers", rows)
+        section(T["sec_placeholders"], rows)
 
-    section("Still marked as expected values (replace with measured data)",
-            [f"- **{sec}**: {text}" for sec, text in r["expected"]])
-    return "\n".join(lines).rstrip() + "\n"
+    section(T["sec_expected"], [f"- **{sec}**: {text}" for sec, text in r["expected"]])
+
+    body = "\n".join(lines).rstrip() + "\n"
+    if lang == "fa":
+        body = '<div dir="rtl" align="right">\n\n' + body + "\n</div>\n"
+    return body
 
 
 # --------------------------------------------------------------------------
@@ -324,6 +395,8 @@ def main(argv=None):
     parser.add_argument("--ris", default=str(DEFAULT_RIS), help="RIS reference export")
     parser.add_argument("--out", help="also write the report to this Markdown file")
     parser.add_argument("--strict", action="store_true", help="exit with 1 on any warning")
+    parser.add_argument("--lang", choices=sorted(STRINGS), default="en",
+                        help="report language: en (English) or fa (Persian); default en")
     args = parser.parse_args(argv)
 
     try:
@@ -334,7 +407,7 @@ def main(argv=None):
     paragraphs = read_paragraphs(args.docx)
     ris = read_ris(args.ris) if Path(args.ris).exists() else None
     result = analyse(paragraphs, ris)
-    report = render(result)
+    report = render(result, args.lang)
     print(report)
     if args.out:
         Path(args.out).write_text(report, encoding="utf-8")

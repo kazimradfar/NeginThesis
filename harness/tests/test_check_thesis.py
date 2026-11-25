@@ -123,6 +123,25 @@ class Report(unittest.TestCase):
         self.assertIn("# Thesis check report", text)
         self.assertIn("| Check | Result |", text)
 
+    def test_persian_report_is_right_to_left_and_translated(self):
+        paragraphs = doc(
+            P("Heading1", "Intro"),
+            P("", "Cited (1) and (4). Pending [TO BE CONFIRMED: model]."),
+            P("Heading1", "References"),
+            P("EndNoteBibliography", "1.Alpha A. First paper title here. J Test. 2000."),
+        )
+        text = ct.render(ct.analyse(paragraphs), "fa")
+        self.assertTrue(text.startswith('<div dir="rtl"'))
+        self.assertTrue(text.rstrip().endswith("</div>"))
+        self.assertIn("گزارش بررسی پایان‌نامه", text)
+        self.assertIn("| بررسی | نتیجه |", text)
+        self.assertIn("منبع شماره 4 وجود ندارد", text)   # the missing-reference line
+        self.assertIn("[TO BE CONFIRMED: model]", text)    # markers stay as written
+        self.assertNotIn("Thesis check report", text)
+
+    def test_both_languages_have_the_same_keys(self):
+        self.assertEqual(set(ct.STRINGS["en"]), set(ct.STRINGS["fa"]))
+
 
 if __name__ == "__main__":
     unittest.main()

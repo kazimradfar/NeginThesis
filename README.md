@@ -51,6 +51,7 @@
 | `Reference/` | کتابخانه EndNote (`Negin Thesis.enl`) و فهرست منابع به قالب RIS (`VMAT-TBI_thesis_references.ris`) |
 | `TBI/TBI/` | پروپوزال پایان‌نامه (Word و PDF)، فایل‌های ارائه (PowerPoint)، فلوچارت روش‌شناسی و یک پایان‌نامه مرجع (`spec_unimi_S63341.pdf`) |
 | `TBI/TBI/Methodology.py` و `Method.ipynb` | کد پایتون (reportlab) برای ساخت فلوچارت روش‌شناسی به صورت PDF |
+| `harness/` | ابزار بررسی خودکار پایان‌نامه (ارجاع‌ها، فهرست منابع و موارد حل‌نشده) به همراه گزارش فارسی و انگلیسی؛ راهنما: [harness/README.fa.md](harness/README.fa.md) |
 
 ## مشارکت‌کنندگان
 

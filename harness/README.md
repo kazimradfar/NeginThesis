@@ -12,6 +12,14 @@ python harness/check_thesis.py --out harness/report.md
 
 The report is printed on screen and saved to `harness/report.md`. Use `--docx` and `--ris` to point to other files, and `--strict` to make the script exit with an error on any warning.
 
+For a Persian (right-to-left) report, add `--lang fa`:
+
+```
+python harness/check_thesis.py --lang fa --out harness/report.fa.md
+```
+
+Persian instructions: [README.fa.md](README.fa.md)
+
 ## What it checks
 
 | Check | Level |
