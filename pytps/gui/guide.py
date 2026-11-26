@@ -68,9 +68,9 @@ STEPS = [
      "damage (keeps the mean lung dose below about 10 Gy), lungs quadratic overdose 10 Gy, body maximum dose 14.4 Gy (120 %)."),
     ("6 · Optimisation",
      "Stage 1 optimises the fluence of every arc sector; Stage 2 converts it into MLC apertures and optimises their weights. "
-     "Whole-body plans take about one to two minutes here (much longer in a clinical system)."),
+     "Whole-body plans take about two to three minutes here (much longer in a clinical system)."),
     ("7 · Evaluation and junctions",
-     "Goals: PTV V90% ≥ 95 %, D2% ≤ 110 % (13.2 Gy), mean lung dose ≤ 10 Gy, body Dmax ≤ 120 %. "
+     "Goals: PTV V90% ≥ 95 %, D2% ≤ 110 % (13.2 Gy), mean lung dose ≤ 10 Gy, body near-maximum D0.1% ≤ 120 %. "
      "Look at the dose profile along the body (lower area ▸ Profile) at each junction: no cold or hot band should appear where "
      "the fields of two isocentres overlap."),
     ("8 · Robustness of the junctions",
@@ -155,7 +155,7 @@ class GuideDock(QDockWidget):
                 w.rx_panel.refresh(); w.rx_panel.grid.setValue(8.0); w.show_planning(1)
             elif k == 4:
                 from .planning import ensure_plan
-                ensure_plan(st).costs = [Cost("PTV_TBI", "Target Penalty", 12.0, 95), Cost("PTV_TBI", "Quadratic Overdose", 13.2, 0.3),
+                ensure_plan(st).costs = [Cost("PTV_TBI", "Target Penalty", 12.0, 95, 1.5), Cost("PTV_TBI", "Quadratic Overdose", 13.2, 0.3),
                                          Cost("Lungs", "Parallel", 8.0, 55), Cost("Lungs", "Quadratic Overdose", 10.0, 0.5, 0.5),
                                          Cost("BODY", "Maximum Dose", 14.4)]
                 st.changed.emit("costs"); w.show_planning(2)
@@ -167,7 +167,7 @@ class GuideDock(QDockWidget):
             elif k == 6:
                 ev = w.evaluation
                 ev.goal_list = [("PTV_TBI", "V", 0.9 * RX, ">=", 95.0), ("PTV_TBI", "D", 2.0, "<=", 1.1 * RX),
-                                ("Lungs", "Dmean", 0.0, "<=", 10.0), ("BODY", "Dmax", 0.0, "<=", 1.2 * RX)]
+                                ("Lungs", "Dmean", 0.0, "<=", 10.0), ("BODY", "D", 0.1, "<=", 1.2 * RX)]
                 b = st.plan.beams[0] if st.plan and st.plan.beams else None
                 if b is not None:
                     st.set_cursor(np.array([0.0, 8.0, st.cursor[2]]))

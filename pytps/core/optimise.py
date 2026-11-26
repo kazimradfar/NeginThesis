@@ -67,7 +67,7 @@ class OptSettings:
 class VoxelSet:
     """Dose-grid voxels used by the optimiser: all voxels of the cost-function structures, the rest of the body sparsely."""
 
-    def __init__(self, eng: DoseEngine, costs: list[Cost], target: str, layering: bool, max_voxels=60000):
+    def __init__(self, eng: DoseEngine, costs: list[Cost], target: str, layering: bool, max_voxels=150000):
         ss, img, g = eng.ss, eng.ss.image, eng.grid
         ijk = np.round(img.world_to_index(g.pts)).astype(int)
         ok = (ijk >= 0).all(1) & (ijk[:, 0] < img.shape[2]) & (ijk[:, 1] < img.shape[1]) & (ijk[:, 2] < img.shape[0])

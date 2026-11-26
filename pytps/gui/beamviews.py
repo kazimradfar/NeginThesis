@@ -433,11 +433,13 @@ class RoomView(QWidget):
             P = Rcouch @ ORIENT.get(orient, ORIENT["HFS"])
             for s, pts in self._body:
                 xy, _ = f((pts - iso) @ P.T)
-                c = QColor(*s.color); c.setAlpha(120 if s.type == "EXTERNAL" else 200)
+                c = QColor(*s.color); c.setAlpha(230)
                 if s.type == "EXTERNAL":
-                    c = QColor(232, 196, 170, 110)
-                p.setPen(QPen(c, 1.0)); p.setBrush(Qt.NoBrush)
-                p.drawPolyline(QPolygonF([QPointF(*q) for q in xy] + [QPointF(*xy[0])]))
+                    c = QColor(245, 210, 185, 210)
+                fill = QColor(c); fill.setAlpha(28 if s.type == "EXTERNAL" else 60)
+                p.setPen(QPen(c, 1.4)); p.setBrush(fill)
+                p.drawPolygon(QPolygonF([QPointF(*q) for q in xy]))
+                p.setBrush(Qt.NoBrush)
         # beam from the source through the jaws
         if cp is not None:
             fr = Frame(cp, b.iso, b.orientation)
