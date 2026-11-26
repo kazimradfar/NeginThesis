@@ -15,6 +15,8 @@ def main(argv=None):
     ap.add_argument("--size", default="1500x900", help="window size WxH")
     ap.add_argument("--demo-plan", default="", help="add demo beams and calculate, e.g. '0,90,180,270' (gantry angles)")
     ap.add_argument("--dose-mode", default="lines", choices=["lines", "wash", "off"])
+    ap.add_argument("--optimise", type=int, default=0, help="with --demo-plan: optimise the beams (Stage 1 iterations)")
+    ap.add_argument("--arc", action="store_true", help="with --demo-plan: use one arc instead of static fields")
     ap.add_argument("--screenshot", help="save a screenshot after start and quit (for tests)")
     a = ap.parse_args(argv)
 
@@ -39,7 +41,17 @@ def main(argv=None):
     if a.demo_plan and w.state.image is not None:
         from .gui.planning import demo_beams
         demo_beams(w.state, [float(g) for g in a.demo_plan.split(",")])
-        w.rx_panel.refresh(); w.rx_panel.calculate()
+        if a.arc:
+            b = w.state.plan.beams[0]; b.kind = "ARC"; b.gantry, b.arc_stop = 181.0, 179.0
+            del w.state.plan.beams[1:]
+        if a.optimise:
+            for b in w.state.plan.beams:
+                b.mlc_mode = "optimised"; b.x1 -= 5; b.x2 += 5; b.y1 -= 5; b.y2 += 5
+            w.rx_panel.refresh(); w.rx_panel.store()
+            w.opt_panel.it1.setValue(a.optimise); w.opt_panel.it2.setValue(max(10, a.optimise // 3))
+            w.opt_panel.both()
+        else:
+            w.rx_panel.refresh(); w.rx_panel.calculate()
         w.set_dose_mode(a.dose_mode)
     w.grid.set_mode(a.layout)
     if a.workspace:
