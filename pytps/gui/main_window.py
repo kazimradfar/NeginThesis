@@ -22,7 +22,7 @@ from .sliceview import SliceView
 from .state import WL_PRESETS, AppState
 
 
-SOURCE_URL = "https://github.com/kazimradfar/NeginThesis/tree/pytps/PyTPS"
+SOURCE_URL = "https://github.com/kazimradfar/PyTPS"
 
 
 class Placeholder(QWidget):

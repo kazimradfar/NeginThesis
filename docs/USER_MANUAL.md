@@ -3,7 +3,7 @@
 **PyTPS 0.2.2 · educational radiotherapy treatment planning system**
 
 Developed by **Kazim Radfar**, PhD student in Medical Physics.
-Open source under the MIT licence. Source code: https://github.com/kazimradfar/NeginThesis/tree/pytps/PyTPS
+Open source under the MIT licence. Source code: https://github.com/kazimradfar/PyTPS
 
 > **Not for clinical use.** PyTPS is a teaching program. It is not a medical device, it is not commissioned for any
 > treatment machine, and its beam data are generic teaching values. Never use it to plan, check or deliver a
@@ -87,7 +87,7 @@ Do not import them into a clinical treatment system.
 
 ### 3.2 Windows setup program
 
-1. Open the release page on GitHub (Releases ▸ *PyTPS x.y.z*) and download `PyTPS_Setup_vx.y.z.exe`.
+1. Open https://github.com/kazimradfar/PyTPS/releases/latest and download `PyTPS_Setup_vx.y.z.exe`.
 2. Run it. It installs for the current user only and needs no administrator rights.
 3. The program is not code-signed, so Windows SmartScreen may say *unknown publisher*: choose **More info ▸ Run anyway**.
 4. Start PyTPS from the Start menu. Uninstall it from Windows **Settings ▸ Apps**.
@@ -97,16 +97,19 @@ The portable version (`PyTPS_portable.zip`) needs no installation: unzip it and 
 ### 3.3 Run from source
 
 ```
-git clone https://github.com/kazimradfar/NeginThesis.git
-cd NeginThesis
-git checkout pytps
+git clone https://github.com/kazimradfar/PyTPS.git
 cd PyTPS
 python -m pip install -r requirements.txt
 python run_pytps.py
 ```
 
 `run_pytps.py` must be started from the `PyTPS` folder (or give its full path). `python -m pytps` does the same.
-To update later: `git pull` in the `NeginThesis` folder.
+To update later: `git pull` in the `PyTPS` folder.
+
+Easier on Windows: double-click `start_pytps.bat`. The first start creates a private Python environment (`.venv`)
+in the folder and installs everything PyTPS needs (internet needed once); later starts are quick.
+On Linux or macOS use `./start_pytps.sh`. With `pip install .` PyTPS is installed as a package and started with
+the command `pytps`.
 
 ### 3.4 Command-line options
 
@@ -665,6 +668,7 @@ It is released under the MIT licence (see the file `LICENSE`): you may use, copy
 courses, as long as the copyright notice is kept. There is no warranty of any kind.
 
 Please cite it as: *Radfar K. PyTPS: an educational radiotherapy treatment planning system (version 0.2.2).
-https://github.com/kazimradfar/NeginThesis*
+https://github.com/kazimradfar/PyTPS*
 
-Bug reports and suggestions are welcome as GitHub issues in the repository.
+Bug reports and suggestions are welcome as GitHub issues in the repository. How to change the program yourself is
+described in `docs/EDITING_GUIDE.md`.

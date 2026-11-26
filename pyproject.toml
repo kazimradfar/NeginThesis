@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytps"
+dynamic = ["version"]
+description = "Radiotherapy treatment planning system for teaching medical physics students"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Kazim Radfar" }]
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.6",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-image>=0.22",
+    "pydicom>=2.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pyinstaller"]
+
+[project.urls]
+Homepage = "https://github.com/kazimradfar/PyTPS"
+Manual = "https://github.com/kazimradfar/PyTPS/blob/main/docs/USER_MANUAL.md"
+
+[project.gui-scripts]
+pytps = "pytps.__main__:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "pytps.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["pytps*"]
+
+[tool.setuptools.package-data]
+pytps = ["resources/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

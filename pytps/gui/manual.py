@@ -9,7 +9,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLineEdit, QListWidget, QPushButton, QSplitter, QTextBrowser,
                                QVBoxLayout)
 
-MANUAL_URL = "https://github.com/kazimradfar/NeginThesis/blob/pytps/PyTPS/docs/USER_MANUAL.md"
+MANUAL_URL = "https://github.com/kazimradfar/PyTPS/blob/main/docs/USER_MANUAL.md"
 
 
 def manual_path():

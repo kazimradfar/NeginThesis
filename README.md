@@ -1,11 +1,14 @@
-# PyTPS — educational radiotherapy treatment planning system
+# PyTPS — radiotherapy treatment planning system for teaching
 
 PyTPS is a desktop program for **teaching treatment planning** to medical physics students (MSc level).
 It follows the workflow of a modern planning system: patient import, contouring, beams, prescription,
 dose calculation and plan evaluation. It has its own design and is not affiliated with any vendor.
 
-Developed by **Kazim Radfar**, PhD student in Medical Physics. **User manual:** [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
-(also in the program: Help ▸ User manual, Shift + F1).
+Developed by **Kazim Radfar**, PhD student in Medical Physics.
+
+- **Download for Windows:** [latest release](https://github.com/kazimradfar/PyTPS/releases/latest) (setup program or portable zip)
+- **User manual:** [docs/USER_MANUAL.md](docs/USER_MANUAL.md) (also in the program: Help ▸ User manual, Shift + F1)
+- **Changing the program:** [docs/EDITING_GUIDE.md](docs/EDITING_GUIDE.md) (how to add, remove or change anything)
 
 > **Not for clinical use.** PyTPS is not a medical device, is not commissioned for any treatment machine
 > and must not be used to plan, check or deliver patient treatments. The beam data are generic teaching values.
@@ -55,6 +58,13 @@ Planned next: see `ROADMAP.md`.
 
 ## Run from source
 
+Easiest on Windows: download the code (green *Code* button ▸ *Download ZIP*, or `git clone
+https://github.com/kazimradfar/PyTPS.git`) and double-click **`start_pytps.bat`**. The first start creates a private
+Python environment (`.venv`) in the folder and installs all dependencies (internet needed once). On Linux or macOS:
+`./start_pytps.sh`. Python 3.10 or newer must be installed.
+
+By hand:
+
 ```
 python -m pip install -r requirements.txt
 python run_pytps.py                       # or: python -m pytps
@@ -74,9 +84,35 @@ Python 3.10 or newer. Tested on Windows and Linux. A 4 mm dose grid needs about 
 ## Windows program
 
 The Windows setup program and a portable zip are built by GitHub Actions **on request only**:
-Actions ▸ *PyTPS* ▸ *Run workflow* ▸ branch `pytps`, tick *Build the Windows program*. The build is tested
-(self-test, silent install, uninstall) and published as the release `pytps-v<version>`.
-Pushes to the branch only run the tests and screenshots.
+Actions ▸ *PyTPS* ▸ *Run workflow* ▸ branch `main`, tick *Build the Windows program*. The build is tested
+(self-test, silent install, uninstall) and published as the release `v<version>`.
+Pushes only run the tests and the screenshots (branch `ci-shots`).
+
+## Dependencies
+
+| Package | Used for |
+|---|---|
+| PySide6 (Qt 6) | the user interface |
+| numpy, scipy | arrays, dose calculation, convolution, optimisation |
+| scikit-image | contours of structures |
+| pydicom | reading and writing DICOM (CT, RT Structure Set, RT Plan, RT Dose) |
+| pytest, PyInstaller | tests and the Windows build (developers only) |
+
+All are listed in `requirements.txt` and `pyproject.toml` (`pip install .` installs PyTPS as a package with the
+command `pytps`). The Windows program contains Python and all packages, so nothing else needs to be installed.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `pytps/core/` | images, structures, phantoms, DICOM, beams, beam data, dose engine, plans, optimiser (no user interface) |
+| `pytps/gui/` | main window, panels, views, overlays, evaluation, guided exercise, manual viewer, icons |
+| `pytps/resources/` | program icon |
+| `tests/` | automatic tests (`python -m pytest tests -q`) |
+| `docs/` | user manual with images, editing guide |
+| `installer/` | Inno Setup script of the Windows setup program |
+| `.github/workflows/build.yml` | tests, screenshots and (on request) the Windows build and release |
+| `run_pytps.py`, `start_pytps.bat`, `start_pytps.sh` | start scripts |
 
 ## Mouse and keys
 
