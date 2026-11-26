@@ -37,7 +37,7 @@ class BEVView(QWidget):
         return b, cps[min(st.cp_index, len(cps) - 1)] if b.kind == "ARC" else cps[0]
 
     def _extent(self, cp):
-        half = max(110.0, max(abs(cp.x1), abs(cp.x2), abs(cp.y1), abs(cp.y2)) + 40)
+        half = max(150.0, max(abs(cp.x1), abs(cp.x2), abs(cp.y1), abs(cp.y2)) + 60)
         return half
 
     def mapping(self, cp):
@@ -72,7 +72,11 @@ class BEVView(QWidget):
             acc += ndimage.map_coordinates(dens, [ijk[..., 2].ravel(), ijk[..., 1].ravel(), ijk[..., 0].ravel()], order=1, cval=0.0).reshape(U.shape)
         acc *= step
         # emphasise bone and air contrast like a radiograph
-        g = 1 - np.exp(-acc / max(1.0, np.percentile(acc[acc > 0], 95) if (acc > 0).any() else 1.0) * 2.2)
+        if (acc > 0).any():
+            lo, hi = np.percentile(acc[acc > 0], [2, 99.5])
+            g = np.clip((acc - lo) / max(hi - lo, 1e-3), 0, 1) ** 0.8 * (acc > 0)
+        else:
+            g = acc
         g8 = np.clip(g * 255, 0, 255).astype(np.uint8)[::-1].copy()      # row 0 = top = +v
         qi = QImage(g8.data, n, n, n, QImage.Format_Grayscale8).copy()
         outlines = {}
