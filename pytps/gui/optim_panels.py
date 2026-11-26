@@ -195,7 +195,8 @@ class OptimisationPanel(QWidget):
         costs = p.costs
         if not any(c.on for c in costs):
             QMessageBox.information(self, "Optimisation", "Add cost functions in IMRT Constraints."); return None
-        grid = 4.0 if max(b - a for a, b in st.image.extent()) < 600 else 6.0
+        big = max(b - a for a, b in st.image.extent())
+        grid = getattr(st, "grid_mm", None) or (4.0 if big < 600 else 6.0 if big < 800 else 8.0)
         if st.engine is None or st.engine_version != (st.ss.version, st.density_version):
             st.engine = DoseEngine(st.ss, st.models, grid); st.engine_version = (st.ss.version, st.density_version); p.beam_dose.clear()
         # fixed beams need their dose first (bias)

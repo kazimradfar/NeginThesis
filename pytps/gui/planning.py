@@ -329,6 +329,7 @@ class PrescriptionPanel(QWidget):
         lay.addWidget(g)
         g2 = QGroupBox("Dose calculation"); f2 = QFormLayout(g2)
         self.grid = _dspin(2, 10, 1, 4, 0.5, " mm"); f2.addRow("Dose grid", self.grid)
+        self.grid.valueChanged.connect(lambda v: setattr(self.state, "grid_mm", v))
         self.algo = QLabel("Pencil beam (fluence convolution, radiological depth)"); self.algo.setWordWrap(True); f2.addRow("Algorithm", self.algo)
         self.calc = QPushButton("Calculate dose"); self.calc.setStyleSheet("font-weight:600"); self.calc.clicked.connect(self.calculate)
         f2.addRow(self.calc)
@@ -345,7 +346,9 @@ class PrescriptionPanel(QWidget):
         self.target.blockSignals(True); self.target.clear(); self.target.addItems(st.ss.names()); self.target.setCurrentText(p.rx.target); self.target.blockSignals(False)
         self.dose.setValue(p.rx.dose); self.fx.setValue(p.rx.fractions); self.method.setCurrentText(p.rx.method); self.pct.setValue(p.rx.percent)
         e = st.image.extent(); big = max(b - a for a, b in e)
-        if big > 600 and self.grid.value() < 5:
+        if big > 800 and self.grid.value() < 8:
+            self.grid.setValue(8.0)
+        elif big > 600 and self.grid.value() < 5:
             self.grid.setValue(6.0)
 
     def store(self):

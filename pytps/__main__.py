@@ -17,6 +17,8 @@ def main(argv=None):
     ap.add_argument("--dose-mode", default="lines", choices=["lines", "wash", "off"])
     ap.add_argument("--optimise", type=int, default=0, help="with --demo-plan: optimise the beams (Stage 1 iterations)")
     ap.add_argument("--arc", action="store_true", help="with --demo-plan: use one arc instead of static fields")
+    ap.add_argument("--guide-tbi", action="store_true", help="open the VMAT-TBI guided exercise and do all steps (demo)")
+    ap.add_argument("--beam-tab", default="", help="BEV, 3D or Room")
     ap.add_argument("--screenshot", help="save a screenshot after start and quit (for tests)")
     ap.add_argument("--self-test", dest="self_test", help="run a short check of the installed program and write the result (JSON)")
     a = ap.parse_args(argv)
@@ -57,6 +59,13 @@ def main(argv=None):
         else:
             w.rx_panel.refresh(); w.rx_panel.calculate()
         w.set_dose_mode(a.dose_mode)
+    if a.guide_tbi:
+        w.show_guide()
+        for k in range(7):
+            w.guide.run(k)
+    if a.beam_tab:
+        i = {"bev": 0, "3d": 1, "room": 2}.get(a.beam_tab.lower(), 0)
+        w.beamviews.setCurrentIndex(i)
     w.grid.set_mode(a.layout)
     if a.workspace:
         for i in range(w.work.count()):

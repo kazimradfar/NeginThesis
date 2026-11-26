@@ -83,3 +83,31 @@ def test_plans_compare_sum_report(tmp_path):
     from pytps.gui.beamdata_dialog import BeamDataDialog
     d = BeamDataDialog(w.state, w); d.fit(); d.close()
     w.close()
+
+
+def test_guide_tbi_steps_and_field_drag():
+    import numpy as np
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QApplication
+    from pytps.gui.main_window import MainWindow
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); w.resize(1600, 900); w.show()
+    w.show_guide()
+    for k in range(5):
+        w.guide.run(k)
+        assert w.guide.status[k].text().startswith("✔"), (k, w.guide.status[k].text())
+    p = w.state.plan
+    assert len(p.beams) == 6 and {round(b.iso[2]) for b in p.beams} == {-155, -425, -720}
+    # drag the Y2 jaw of the first beam in the coronal view
+    cor = w.views[1]; app.processEvents()
+    b = p.beams[0]; y2 = b.y2
+    w.state.cur_beam = b.name
+    s, S, _ = cor.mapping()
+    edge = S(0.0, b.iso[2] + b.y2)          # coronal: u = x, v = z (Y towards the head for HFS)
+    hit = cor._field_hit(edge)
+    assert hit is not None and hit[0] == "jaw" and hit[2] == "y2"
+    cor._drag_field(("field",) + hit, S(0.0, b.iso[2] + b.y2 + 20))
+    assert abs(b.y2 - (y2 + 20)) < 2
+    w.beamviews.setCurrentIndex(2); app.processEvents()
+    w.lower.setCurrentWidget(w.profile); app.processEvents()
+    w.close()
