@@ -13,6 +13,8 @@ def main(argv=None):
     ap.add_argument("--workspace", default="", help="workspace tab to show (Patient, Contouring, Planning, Evaluation)")
     ap.add_argument("--tool", default="", help="toolbar tool to select")
     ap.add_argument("--size", default="1500x900", help="window size WxH")
+    ap.add_argument("--demo-plan", default="", help="add demo beams and calculate, e.g. '0,90,180,270' (gantry angles)")
+    ap.add_argument("--dose-mode", default="lines", choices=["lines", "wash", "off"])
     ap.add_argument("--screenshot", help="save a screenshot after start and quit (for tests)")
     a = ap.parse_args(argv)
 
@@ -34,6 +36,11 @@ def main(argv=None):
     if a.dicom:
         w.patient.choose_folder(a.dicom)
         w.patient.load_selected()
+    if a.demo_plan and w.state.image is not None:
+        from .gui.planning import demo_beams
+        demo_beams(w.state, [float(g) for g in a.demo_plan.split(",")])
+        w.rx_panel.refresh(); w.rx_panel.calculate()
+        w.set_dose_mode(a.dose_mode)
     w.grid.set_mode(a.layout)
     if a.workspace:
         for i in range(w.work.count()):

@@ -6,12 +6,16 @@ import os
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QGridLayout, QLabel, QMainWindow, QMessageBox,
-                               QPlainTextEdit, QSplitter, QTabWidget, QToolBar, QVBoxLayout, QWidget)
+                               QPlainTextEdit, QSpinBox, QSplitter, QTabWidget, QToolBar, QVBoxLayout, QWidget)
 
 from .. import DISCLAIMER, __version__
 from ..core.phantoms import PHANTOMS
 from . import icons
+from .beamviews import BeamViews
+from .evaluation import DVHWidget, EvaluationPanel
+from .overlays import BeamOverlay, DoseOverlay
 from .panels import ContourPanel, PatientPanel
+from .planning import BeamsPanel, PrescriptionPanel
 from .sliceview import SliceView
 from .state import WL_PRESETS, AppState
 
@@ -86,8 +90,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"PyTPS {__version__} — educational treatment planning (not for clinical use)")
         self.resize(1500, 900)
         st = self.state
-        self.views = [SliceView(st, "axial"), SliceView(st, "coronal"), SliceView(st, "sagittal"),
-                      Placeholder("Beam's eye view / 3D", "Add beams in the Planning workspace to see the beam's eye view and the 3D model.")]
+        self.beamviews = BeamViews(st)
+        self.views = [SliceView(st, "axial"), SliceView(st, "coronal"), SliceView(st, "sagittal"), self.beamviews]
+        self.dose_ov, self.beam_ov = DoseOverlay(st), BeamOverlay(st)
+        for v in self.views[:3]:
+            v.overlays = [self.dose_ov, self.beam_ov]
         self.grid = ViewGrid(self.views)
 
         # workspaces (left)
@@ -96,21 +103,19 @@ class MainWindow(QMainWindow):
         self.work.addTab(self.patient, "Patient")
         self.work.addTab(self.contour, "Contouring")
         self.planning = QTabWidget()
-        for t, txt in (("Beams", "Beams: add fields and arcs, isocentre, gantry, collimator, couch, jaws, MLC, wedges."),
-                       ("Prescription", "Prescription: dose, fractions, target and normalisation."),
-                       ("IMRT Constraints", "IMRT constraints: cost functions per structure."),
-                       ("Parameters", "Optimisation and sequencing parameters."),
-                       ("Optimisation", "Stage 1 fluence and Stage 2 segment optimisation.")):
-            lab = QLabel(txt + "\n\n(Coming in the next PyTPS version.)"); lab.setWordWrap(True); lab.setAlignment(Qt.AlignTop)
+        self.beams_panel = BeamsPanel(st); self.rx_panel = PrescriptionPanel(st)
+        self.planning.addTab(self.beams_panel, "Beams"); self.planning.addTab(self.rx_panel, "Prescription")
+        for t, txt in (("IMRT Constraints", "IMRT constraints: cost functions per structure (target penalty, EUD, serial, parallel, DVH points, conformality)."),
+                       ("Optimisation", "Stage 1 fluence and Stage 2 segment optimisation for IMRT and VMAT.")):
+            lab = QLabel(txt + "\n\n(Next PyTPS version.)"); lab.setWordWrap(True); lab.setAlignment(Qt.AlignTop)
             lab.setMargin(10); self.planning.addTab(lab, t)
         self.work.addTab(self.planning, "Planning")
-        ev = QLabel("Evaluation: DVH, clinical goals, plan comparison, plan sum.\n\n(Coming with the dose calculation.)")
-        ev.setWordWrap(True); ev.setAlignment(Qt.AlignTop); ev.setMargin(10)
-        self.work.addTab(ev, "Evaluation")
+        self.evaluation = EvaluationPanel(st)
+        self.work.addTab(self.evaluation, "Evaluation")
 
         # lower area: DVH / plan summary / log
         self.lower = QTabWidget()
-        self.dvh = Placeholder("DVH", "Dose-volume histograms appear here after a dose calculation.")
+        self.dvh = DVHWidget(st)
         self.log = QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(500)
         self.lower.addTab(self.dvh, "DVH"); self.lower.addTab(self.log, "Messages")
 
@@ -179,10 +184,22 @@ class MainWindow(QMainWindow):
         for t, f in (("Interpolate", self.contour.interpolate), ("Fill holes", self.contour.fill_holes),
                      ("Keep largest part", self.contour.largest), ("Body outline from CT", self.contour.auto_body)):
             m.addAction(t, lambda f=f: (self.work.setCurrentWidget(self.contour), f()))
-        # Planning (next version)
+        # Planning
         m = mb.addMenu("&Planning")
-        for t in ("New plan", "Add field", "Add arc", "Set isocentre", "Prescription…", "Calculate dose", "Optimise"):
-            a = m.addAction(t); a.setEnabled(False)
+        self.a_beam = self._act("Add beam", self.add_beam, icons.beam(), "Ctrl+B", "Add a static field at the isocentre")
+        self.a_calc = self._act("Calculate dose", self.calculate, icons.calc(), "F5", "Calculate the dose of the plan")
+        m.addAction(self.a_beam); m.addAction(self._act("Add arc", lambda: (self.show_planning(0), self.beams_panel.add_arc())))
+        m.addAction(self._act("Add opposed beam", lambda: (self.show_planning(0), self.beams_panel.opposed())))
+        m.addAction(self._act("Isocentre to target centre", lambda: (self.show_planning(0), self.beams_panel.iso_target())))
+        m.addAction(self._act("Prescription…", lambda: self.show_planning(1)))
+        m.addSeparator(); m.addAction(self.a_calc)
+        dm = m.addMenu("Dose display")
+        dg = QActionGroup(self)
+        for k, n in (("lines", "Isodose lines"), ("wash", "Colour wash"), ("off", "Off")):
+            a = self._act(n, lambda _=False, k=k: self.set_dose_mode(k), checkable=True); dg.addAction(a); dm.addAction(a)
+            if k == "lines":
+                a.setChecked(True)
+        a = self._act("Show beams in the slices", lambda on: self.show_beams(on), checkable=True); a.setChecked(True); m.addAction(a)
         # Tools / Help
         m = mb.addMenu("&Tools")
         m.addAction(self._act("Measure distance", lambda: self.set_tool("ruler"), icons.ruler()))
@@ -221,6 +238,11 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self._act("Undo", st.undo, icons.undo(), tip="Undo (Ctrl+Z)")); tb.addAction(self._act("Redo", st.redo, icons.undo(True), tip="Redo (Ctrl+Y)"))
         tb.addSeparator()
+        tb.addAction(self.a_beam); tb.addAction(self.a_calc)
+        tb.addWidget(QLabel("  CP "))
+        self.cpbox = QSpinBox(); self.cpbox.setRange(1, 1); self.cpbox.setToolTip("Control point of the selected arc (BEV, 3D and slices)")
+        self.cpbox.valueChanged.connect(self._cp_changed); tb.addWidget(self.cpbox)
+        tb.addSeparator()
         tb.addAction(self._act("Screenshot", self.save_screenshot, icons.camera(), tip="Save the window as PNG"))
 
     # ------------------------------------------------------------------ actions
@@ -230,6 +252,36 @@ class MainWindow(QMainWindow):
             self.tool_acts[k].setChecked(True)
         if k in ("brush", "eraser", "polygon"):
             self.work.setCurrentWidget(self.contour)
+
+    def show_planning(self, i):
+        self.work.setCurrentWidget(self.planning); self.planning.setCurrentIndex(i)
+
+    def add_beam(self):
+        self.show_planning(0); self.beams_panel.add_static()
+
+    def calculate(self):
+        self.show_planning(1); self.rx_panel.calculate()
+
+    def set_dose_mode(self, k):
+        self.dose_ov.mode = k
+        for v in self.views[:3]:
+            v.update()
+
+    def show_beams(self, on):
+        self.beam_ov.show = bool(on)
+        for v in self.views[:3]:
+            v.update()
+
+    def _cp_changed(self, v):
+        self.state.cp_index = v - 1
+        self.state.changed.emit("beam")
+
+    def _sync_cp(self):
+        st = self.state
+        b = st.plan.beam(st.cur_beam) if st.plan and st.cur_beam else None
+        n = len(b.control_points()) if b is not None and b.kind == "ARC" else 1
+        self.cpbox.blockSignals(True); self.cpbox.setRange(1, n); self.cpbox.setValue(min(st.cp_index + 1, n)); self.cpbox.blockSignals(False)
+        st.cp_index = self.cpbox.value() - 1
 
     def reset_zoom(self):
         for v in self.views:
@@ -266,6 +318,8 @@ class MainWindow(QMainWindow):
             self.log.appendPlainText(text)
 
     def _changed(self, what):
+        if what in ("plan", "beam", "image"):
+            self._sync_cp()
         if what == "image" and self.state.image is not None:
             self.setWindowTitle(f"PyTPS {__version__} — {self.state.image.patient.get('id', '')} — educational, not for clinical use")
             self._message(f"Loaded {self.state.source}")
