@@ -20,6 +20,11 @@ normalisation, isodoses, DVH, statistics.
 6. Point doses, clinical goals with pass/fail, PDF plan report.
 7. Tests for each item; screenshots in CI; Windows build.
 
+## 0.2.2 (done)
+Colour bar / isodose legend in the slice views; BEV, 3D and room view as the single or large view; export of the
+main view, DVH and dose profile as images and CSV; user manual (docs/USER_MANUAL.md, Help ▸ User manual);
+author in Help ▸ About.
+
 ## 0.3 (ideas)
 - Virtual QA: detector array and gamma analysis of a plan; film in a phantom.
 - Guided exercises with automatic checks (for courses).

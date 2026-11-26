@@ -111,3 +111,73 @@ def test_guide_tbi_steps_and_field_drag():
     w.beamviews.setCurrentIndex(2); app.processEvents()
     w.lower.setCurrentWidget(w.profile); app.processEvents()
     w.close()
+
+
+def test_legend_exports_main_view_manual(tmp_path):
+    import csv
+    from PySide6.QtWidgets import QApplication
+    from pytps.gui.main_window import MainWindow
+    from pytps.gui.manual import ManualDialog, chapters, manual_path
+    from pytps.gui.planning import demo_beams
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); w.resize(1400, 850); w.show()
+    w.patient.load_phantom("Pelvis (prostate)")
+    demo_beams(w.state, [0, 90, 180, 270])
+    w.rx_panel.refresh(); w.rx_panel.calculate()
+    # colour bar in the wash mode: the top-right corner of the transverse view is no longer black
+    w.grid.set_mode("1"); w.grid.show_view("Transverse"); app.processEvents()
+    v = w.views[0]
+    def corner():
+        img = v.grab().toImage()
+        return [img.pixelColor(x, y).name() for x in range(v.width() - 140, v.width() - 10, 3) for y in range(20, 180, 3)]
+    for mode in ("wash", "lines"):
+        w.set_dose_mode(mode); w.show_legend(True); app.processEvents(); a = corner()
+        w.show_legend(False); app.processEvents(); b = corner()
+        assert sum(p != q for p, q in zip(a, b)) > 100, mode
+        w.show_legend(True)
+    # DVH and profile: images and CSV
+    w.dvh.recompute()
+    w.dvh.save_image(str(tmp_path / "dvh.png")); w.dvh.save_csv(str(tmp_path / "dvh.csv"))
+    w.profile.save_image(str(tmp_path / "prof.png")); w.profile.save_csv(str(tmp_path / "prof.csv"))
+    rows = list(csv.reader(open(tmp_path / "dvh.csv")))
+    assert rows[0][0] == "Dose (Gy)" and any(h.startswith("PTV") for h in rows[0])
+    i = next(k for k, h in enumerate(rows[0]) if h.startswith("PTV"))
+    assert float(rows[1][i]) == 100.0 and float(rows[-1][i]) < 1.0
+    assert (tmp_path / "dvh.png").stat().st_size > 10000 and (tmp_path / "prof.png").stat().st_size > 5000
+    # BEV, 3D and room view as the single view
+    for n in ("BEV", "3D", "Room"):
+        w.grid.show_view(n); app.processEvents()
+        assert w.grid.focus is w.beamviews and w.beamviews.isVisible() and w.grid.current_name() == n
+        assert w.mainview.currentText() == n
+        assert not w.views[0].isVisible()
+    w.save_view_image(str(tmp_path / "room.png"))
+    assert (tmp_path / "room.png").exists()
+    # manual and about text
+    assert os.path.exists(manual_path())
+    parts = chapters(open(manual_path(), encoding="utf-8").read())
+    assert len(parts) > 10
+    dlg = ManualDialog(w); dlg.show(); app.processEvents()
+    assert dlg.toc.count() == len(parts) and len(dlg.view.toPlainText()) > 50
+    w.close()
+
+
+def test_rtdose_export_import_compare(tmp_path):
+    pytest.importorskip("pydicom")
+    import numpy as np
+    from PySide6.QtWidgets import QApplication
+    from pytps.gui.main_window import MainWindow
+    from pytps.gui.planning import demo_beams
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); w.resize(1200, 800); w.show()
+    w.patient.load_phantom("Pelvis (prostate)")
+    demo_beams(w.state, [0, 90, 180, 270]); w.rx_panel.refresh(); w.rx_panel.calculate()
+    ref = w.state.plan
+    w.export_rtdose(str(tmp_path / "RD.dcm"))
+    n = len(w.state.plans)
+    w.import_rtdose(str(tmp_path / "RD.dcm"))          # used to fail: numpy was not imported in the main window
+    assert len(w.state.plans) == n + 1
+    imp = w.state.plans[-1]
+    inner = w.state.engine.grid.pts[:, 0] ** 2 < 1e4            # away from the grid edges
+    rel = np.abs(imp.dose[inner] - ref.dose[inner]).max() / ref.dose.max()
+    assert rel < 0.02, rel
+    w.close()

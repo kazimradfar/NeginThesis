@@ -4,15 +4,19 @@ PyTPS is a desktop program for **teaching treatment planning** to medical physic
 It follows the workflow of a modern planning system: patient import, contouring, beams, prescription,
 dose calculation and plan evaluation. It has its own design and is not affiliated with any vendor.
 
+Developed by **Kazim Radfar**, PhD student in Medical Physics. **User manual:** [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
+(also in the program: Help ▸ User manual, Shift + F1).
+
 > **Not for clinical use.** PyTPS is not a medical device, is not commissioned for any treatment machine
 > and must not be used to plan, check or deliver patient treatments. The beam data are generic teaching values.
 
-## Features (version 0.2)
+## Features (version 0.2.2)
 
 - **Patient**: import DICOM CT, RT Structure Set (read locally; names and IDs are replaced by an anonymous
   code), practice phantoms (water, thorax, pelvis, head and neck, breast, whole body for TBI),
   editable CT-to-electron-density table.
-- **Viewer**: linked transverse, coronal and sagittal views, 2 × 2 / one large + three / single layouts,
+- **Viewer**: linked transverse, coronal and sagittal views, 2 × 2 / one large + three / single layouts; any view,
+  including the beam's-eye view, the 3D model and the room view, can be the single or large view;
   window/level presets and mouse window/level, zoom, pan, measuring.
 - **Contouring**: brush, eraser, polygon (add or subtract), 3D margins (different head-foot margin),
   Boolean operations, threshold, interpolation between slices, fill holes, keep largest part,
@@ -27,7 +31,7 @@ dose calculation and plan evaluation. It has its own design and is not affiliate
   (drag the jaws and leaves), and a 3D model of patient and beams.
 - **Dose**: pencil-beam calculation (fluence convolution with penumbra and scatter kernels, radiological
   depth through the density volume), MU calculation and normalisation (isocentre, mean, D95, D50,
-  prescription isodose), isodose lines or colour wash.
+  prescription isodose), isodose lines or colour wash with a colour bar / isodose legend in Gy and %.
 - **IMRT constraints**: cost functions per structure (target penalty, target EUD, quadratic under/overdose,
   under/overdose DVH, maximum dose, serial, parallel, conformality), as objective or constraint, with weights,
   layering and a default set to start from; achieved values are shown after optimisation.
@@ -37,7 +41,9 @@ dose calculation and plan evaluation. It has its own design and is not affiliate
 - **Plans**: several plans per patient (new, copy, rename, delete), plan sum, comparison (dashed DVH and
   statistics side by side), dose-difference display.
 - **Evaluation**: DVH, dose statistics per structure (min, mean, max, D98, D95, D50, D2, V95%), clinical goals with
-  pass/fail, point doses, beam MU and SSD, CSV export, PDF plan report.
+  pass/fail, point doses, beam MU and SSD, dose profile along a line, PDF plan report.
+- **Export**: main view or whole window as image, DVH and dose profile as high-resolution images (white background,
+  for reports) and as CSV data, dose statistics as CSV.
 - **DICOM RT**: export and import of RT Plan (jaws, MLC control points, MU, wedges) and RT Dose; an imported
   dose can be compared with the PyTPS dose.
 - **Beam data editor** (Tools menu): PDD, output factors, head scatter, wedge factors, calibration; refit the
@@ -67,9 +73,10 @@ Python 3.10 or newer. Tested on Windows and Linux. A 4 mm dose grid needs about 
 
 ## Windows program
 
-The GitHub Actions workflow *PyTPS* builds a Windows folder program with PyInstaller
-(Actions ▸ PyTPS ▸ Run workflow ▸ "Build the Windows program"). Download the `PyTPS-windows` artifact
-and start `PyTPS.exe`.
+The Windows setup program and a portable zip are built by GitHub Actions **on request only**:
+Actions ▸ *PyTPS* ▸ *Run workflow* ▸ branch `pytps`, tick *Build the Windows program*. The build is tested
+(self-test, silent install, uninstall) and published as the release `pytps-v<version>`.
+Pushes to the branch only run the tests and screenshots.
 
 ## Mouse and keys
 

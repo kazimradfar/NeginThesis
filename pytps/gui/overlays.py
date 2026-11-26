@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF
 
 from ..core.beams import SAD, Frame
 
@@ -17,7 +17,60 @@ class DoseOverlay:
         self.state = state
         self.mode = "lines"         # lines, wash, off
         self.levels = {lv: True for lv, _ in ISODOSE}
+        self.show_legend = True     # colour bar / isodose legend in each slice view
         self._cache = {}
+
+    def _has_dose(self):
+        st = self.state
+        return not (self.mode == "off" or st.plan is None or st.plan.dose is None or st.engine is None
+                    or len(st.plan.dose) != len(st.engine.grid.pts) or st.plan.rx.dose <= 0)
+
+    def legend(self, p, view):
+        """Colour bar (wash), isodose legend (lines) or difference scale, drawn at the top right of the view."""
+        if not self.show_legend or not self._has_dose():
+            return
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QFont, QLinearGradient
+        st = self.state
+        rx = st.plan.rx.dose
+        small = view.height() < 300
+        row = 11 if small else 15
+        f = QFont(view.font()); f.setPointSizeF(7.0 if small else 8.5); p.setFont(f)
+        W = 92 if small else 112
+        x0 = view.width() - W - 20
+        y0 = 22
+        if self.mode == "difference":
+            if st.compare is None:
+                return
+            H = 8 * row
+            p.fillRect(QRectF(x0 - 6, y0 - 4, W + 6, H + 2 * row + 8), QColor(0, 0, 0, 150))
+            p.setPen(QColor(232, 238, 245)); p.drawText(QPointF(x0, y0 + row - 3), "Difference")
+            bar = QRectF(x0, y0 + row + 2, 12, H)
+            g = QLinearGradient(bar.topLeft(), bar.bottomLeft())
+            g.setColorAt(0.0, QColor(255, 0, 0)); g.setColorAt(0.47, QColor(255, 190, 57, 90))
+            g.setColorAt(0.5, QColor(0, 0, 0, 0)); g.setColorAt(0.53, QColor(60, 200, 255, 90)); g.setColorAt(1.0, QColor(0, 60, 255))
+            p.fillRect(bar, g); p.setPen(QColor(150, 160, 175)); p.drawRect(bar)
+            p.setPen(QColor(232, 238, 245))
+            for frac, lab in ((0.0, "+10 %"), (0.5, "0"), (1.0, "−10 %")):
+                yy = bar.top() + frac * bar.height()
+                gy = {0.0: 0.1 * rx, 0.5: 0.0, 1.0: -0.1 * rx}[frac]
+                p.drawText(QPointF(x0 + 18, yy + 4), f"{lab}  {gy:+.2f} Gy" if frac != 0.5 else "0")
+            return
+        levels = [(lv, col) for lv, col in ISODOSE if self.mode == "wash" or self.levels.get(lv, True)]
+        H = row * (len(levels) + 1) + 6
+        p.fillRect(QRectF(x0 - 6, y0 - 4, W + 6, H + 4), QColor(0, 0, 0, 150))
+        p.setPen(QColor(232, 238, 245))
+        p.drawText(QPointF(x0, y0 + row - 3), f"Rx {rx:.2f} Gy" if rx < 10 else f"Rx {rx:.1f} Gy")
+        for i, (lv, col) in enumerate(levels):
+            yy = y0 + row * (i + 1) + 3
+            if self.mode == "wash":
+                p.fillRect(QRectF(x0, yy, 14, row - 2), QColor(*col))
+            else:
+                p.setPen(QPen(QColor(*col), 2)); p.drawLine(QPointF(x0, yy + row / 2 - 1), QPointF(x0 + 14, yy + row / 2 - 1))
+            p.setPen(QColor(232, 238, 245))
+            gy = rx * lv / 100
+            p.drawText(QPointF(x0 + 20, yy + row - 4), f"{lv:>3d} %")
+            p.drawText(QPointF(x0 + (52 if small else 62), yy + row - 4), f"{gy:.1f} Gy" if gy >= 10 else f"{gy:.2f} Gy")
 
     def _plane(self, view):
         st = self.state
@@ -44,7 +97,7 @@ class DoseOverlay:
 
     def __call__(self, p, view):
         st = self.state
-        if self.mode == "off" or st.plan is None or st.plan.dose is None or st.engine is None or len(st.plan.dose) != len(st.engine.grid.pts):
+        if not self._has_dose():
             return
         sl, u0, v0, h = self._plane(view)
         rx = st.plan.rx.dose
@@ -64,7 +117,7 @@ class DoseOverlay:
             if view._ax()[3] < 0:
                 img = img.mirrored(False, True)
             p.drawImage(QRectF(min(a.x(), b.x()), min(a.y(), b.y()), abs(b.x() - a.x()), abs(b.y() - a.y())), img)
-            p.setPen(QColor(255, 200, 200)); p.drawText(8, 46, f"Dose difference: {st.plan.name} − {st.compare.name if st.compare else '?'} (red hotter, blue colder, ±10 % Rx)")
+            p.setPen(QColor(255, 200, 200)); p.drawText(8, 46, f"Dose difference: {st.plan.name} − {st.compare.name if st.compare else '?'}")
             return
         if self.mode == "wash":
             from PySide6.QtGui import QImage

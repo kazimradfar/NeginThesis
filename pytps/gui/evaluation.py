@@ -5,11 +5,55 @@ import datetime
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QMessageBox,
-                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog, QLabel,
+                               QMenu, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.plan import dose_at, dvh
+
+
+def render_image(draw, w=900, h=520, scale=2):
+    """Render a plot (draw(painter, QRectF)) to a white high-resolution image for reports and theses."""
+    img = QImage(int(w * scale), int(h * scale), QImage.Format_ARGB32)
+    img.fill(QColor(255, 255, 255))
+    p = QPainter(img); p.setRenderHint(QPainter.Antialiasing); p.scale(scale, scale)
+    draw(p, QRectF(0, 0, w, h))
+    p.end()
+    img.setDotsPerMeterX(int(96 * scale / 0.0254)); img.setDotsPerMeterY(int(96 * scale / 0.0254))
+    return img
+
+
+class _PlotMenu:
+    """Right-click menu of the DVH and profile plots: save image, copy image, export data."""
+
+    def contextMenuEvent(self, ev):
+        m = QMenu(self)
+        m.addAction("Save image (PNG)…", self.save_image)
+        m.addAction("Copy image", lambda: QApplication.clipboard().setImage(self.image()))
+        m.addAction("Export data (CSV)…", self.save_csv)
+        m.exec(ev.globalPos())
+
+    def save_image(self, path=None):
+        if not self.has_data():
+            QMessageBox.information(self, self.KIND, "Calculate the dose first."); return
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, f"Save {self.KIND} image", f"{self.FILE}_{self.state.plan.name}.png",
+                                                  "PNG (*.png);;JPEG (*.jpg)")
+        if path:
+            self.image().save(path)
+            self.state.message.emit(f"{self.KIND} image written: {path}")
+
+    def save_csv(self, path=None):
+        if not self.has_data():
+            QMessageBox.information(self, self.KIND, "Calculate the dose first."); return
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, f"Export {self.KIND} data", f"{self.FILE}_{self.state.plan.name}.csv", "CSV (*.csv)")
+        if path:
+            head, rows = self.table()
+            import csv
+            with open(path, "w", newline="", encoding="utf-8") as fh:
+                wr = csv.writer(fh); wr.writerow(head); wr.writerows(rows)
+            self.state.message.emit(f"{self.KIND} data written: {path} ({len(rows)} rows)")
 
 
 def _cmp(state):
@@ -18,7 +62,9 @@ def _cmp(state):
                  and len(c.dose) == len(state.engine.grid.pts)) else None
 
 
-class DVHWidget(QWidget):
+class DVHWidget(_PlotMenu, QWidget):
+    KIND, FILE = "DVH", "DVH"
+
     def __init__(self, state, parent=None):
         super().__init__(parent)
         self.state = state
@@ -50,6 +96,33 @@ class DVHWidget(QWidget):
         p = QPainter(self); p.fillRect(self.rect(), QColor(250, 251, 252)); p.setRenderHint(QPainter.Antialiasing)
         draw_dvh(p, QRectF(self.rect()), self.state, self.curves, self.cmp_curves)
         p.end()
+
+    def has_data(self):
+        return bool(self.curves)
+
+    def image(self, w=900, h=520):
+        st = self.state
+
+        def draw(p, r):
+            p.setPen(QColor(20, 24, 32)); f = QFont(); f.setPointSizeF(10); f.setBold(True); p.setFont(f)
+            title = f"DVH · {st.plan.name} · Rx {st.plan.rx.dose:g} Gy / {st.plan.rx.fractions} fx"
+            p.drawText(QPointF(r.left() + 48, r.top() + 16), title)
+            draw_dvh(p, r.adjusted(0, 24, 0, 0), st, self.curves, self.cmp_curves)
+        return render_image(draw, w, h)
+
+    def table(self):
+        """Cumulative DVH on a common dose axis: dose (Gy) and volume (%) of every shown structure (and compared plan)."""
+        st = self.state
+        cols = [(n, d) for n, (_, d) in self.curves.items()]
+        if self.cmp_curves and st.compare is not None:
+            cols += [(f"{n} [{st.compare.name}]", d) for n, (_, d) in self.cmp_curves.items()]
+        dmax = max(float(d["dose"][-1]) for _, d in cols)
+        step = 0.1 if st.plan.rx.dose >= 10 else 0.02
+        axis = np.arange(0, dmax + step / 2, step)
+        vols = [np.interp(axis, d["dose"], d["volume"], right=0.0) for _, d in cols]
+        head = ["Dose (Gy)"] + [f"{n} volume (%)" for n, _ in cols]
+        rows = [[f"{x:.2f}"] + [f"{v[i]:.3f}" for v in vols] for i, x in enumerate(axis)]
+        return head, rows
 
 
 def draw_dvh(p, rect, state, curves, cmp_curves):
@@ -117,9 +190,16 @@ class EvaluationPanel(QWidget):
         self.points.verticalHeader().hide(); self.points.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); self.points.setMaximumHeight(130)
         lay.addWidget(self.points)
         r3 = QHBoxLayout()
-        for t, f in (("Point at crosshair", self.add_point), ("Clear points", self.clear_points), ("CSV…", self.export), ("PDF report…", self.report)):
+        for t, f in (("Point at crosshair", self.add_point), ("Clear points", self.clear_points), ("PDF report…", self.report)):
             b = QPushButton(t); b.clicked.connect(f); r3.addWidget(b)
         lay.addLayout(r3)
+        r4 = QHBoxLayout(); r4.addWidget(QLabel("Export"))
+        self.dvh_widget = None       # set by the main window
+        for t, f, tip in (("Statistics CSV…", self.export, "Dose statistics table as CSV"),
+                          ("DVH image…", lambda: self.dvh_widget and self.dvh_widget.save_image(), "DVH as a PNG image (white background, for reports)"),
+                          ("DVH data…", lambda: self.dvh_widget and self.dvh_widget.save_csv(), "Cumulative DVH curves as CSV (dose in Gy, volume in %)")):
+            b = QPushButton(t); b.setToolTip(tip); b.clicked.connect(f); r4.addWidget(b)
+        lay.addLayout(r4)
         note = QLabel("Doses come from the educational pencil-beam model and generic beam data."); note.setWordWrap(True)
         note.setStyleSheet("color:#6b7785;font-size:11px"); lay.addWidget(note)
         self.goal_list = []          # (structure, metric, x, op, limit)
@@ -356,8 +436,9 @@ def write_report(path, st, panel, window=None):
     pa.end()
 
 
-class ProfileWidget(QWidget):
+class ProfileWidget(_PlotMenu, QWidget):
     """Dose along a line through the crosshair (head-foot by default: junctions of TBI fields)."""
+    KIND, FILE = "Dose profile", "profile"
 
     def __init__(self, state, parent=None):
         super().__init__(parent)
@@ -383,16 +464,42 @@ class ProfileWidget(QWidget):
         inside = ndimage.map_coordinates(g.inside.astype(np.float32), [c[:, 2], c[:, 1], c[:, 0]], order=0, cval=0.0) > 0.5
         return t, np.where(inside, d, np.nan)
 
-    def paintEvent(self, ev):
-        p = QPainter(self); p.fillRect(self.rect(), QColor(250, 251, 252)); p.setRenderHint(QPainter.Antialiasing)
+    def has_data(self):
         st = self.state
         pl = st.plan
-        if pl is None or pl.dose is None or st.engine is None or len(pl.dose) != len(st.engine.grid.pts):
-            p.setPen(QColor(120, 130, 145)); p.drawText(self.rect(), Qt.AlignCenter, "Dose profile: calculate the dose first")
-            p.end(); return
+        return not (pl is None or pl.dose is None or st.engine is None or len(pl.dose) != len(st.engine.grid.pts))
+
+    def image(self, w=900, h=420):
+        return render_image(lambda p, r: self._draw(p, r.width(), r.height(), hint=False), w, h)
+
+    def table(self):
+        st = self.state
+        t, d = self._line(st.plan)
+        cmp = _cmp(st)
+        d2 = self._line(cmp)[1] if cmp is not None else None
+        head = [f"{self.axis} (cm)", f"{st.plan.name} dose (Gy)"] + ([f"{cmp.name} dose (Gy)"] if cmp is not None else [])
+        rows = []
+        for i, x in enumerate(t):
+            r = [f"{x / 10:.2f}", "" if not np.isfinite(d[i]) else f"{d[i]:.4f}"]
+            if d2 is not None:
+                r.append("" if not np.isfinite(d2[i]) else f"{d2[i]:.4f}")
+            rows.append(r)
+        return head, rows
+
+    def paintEvent(self, ev):
+        p = QPainter(self); p.fillRect(self.rect(), QColor(250, 251, 252)); p.setRenderHint(QPainter.Antialiasing)
+        self._draw(p, self.width(), self.height())
+        p.end()
+
+    def _draw(self, p, width, height, hint=True):
+        st = self.state
+        pl = st.plan
+        if not self.has_data():
+            p.setPen(QColor(120, 130, 145)); p.drawText(QRectF(0, 0, width, height), Qt.AlignCenter, "Dose profile: calculate the dose first")
+            return
         t, d = self._line(pl)
         rx = pl.rx.dose
-        L, R, T, B = 48, self.width() - 12, 22, self.height() - 26
+        L, R, T, B = 48, width - 12, 22, height - 26
         dmax = max(np.nanmax(d) if np.isfinite(d).any() else rx, rx) * 1.12
         X = lambda v: L + (R - L) * (v - t[0]) / (t[-1] - t[0]); Y = lambda v: B - (B - T) * v / dmax
         # field extents along z of each isocentre
@@ -433,6 +540,6 @@ class ProfileWidget(QWidget):
         c = st.cursor
         p.setPen(QColor(40, 48, 60))
         name = {"z": "head–foot (z)", "x": "right–left (x)", "y": "anterior–posterior (y)"}[self.axis]
-        p.drawText(8, 14, f"Dose profile {name} through x {c[0] / 10:.1f}, y {c[1] / 10:.1f}, z {c[2] / 10:.1f} cm · "
-                          f"coloured bands = fields of each isocentre · double-click to change direction" + (f" · dashed: {cmp.name}" if cmp is not None else ""))
-        p.end()
+        p.drawText(8, 14, f"Dose profile {name} through x {c[0] / 10:.1f}, y {c[1] / 10:.1f}, z {c[2] / 10:.1f} cm · {pl.name}"
+                          + (" · coloured bands = fields of each isocentre" if self.axis == "z" and pl.beams else "")
+                          + (" · double-click: direction · right-click: save" if hint else "") + (f" · dashed: {cmp.name}" if cmp is not None else ""))
