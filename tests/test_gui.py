@@ -42,12 +42,15 @@ def test_plan_beams_and_dose():
     w.patient.load_phantom("Pelvis (prostate)")
     demo_beams(w.state, [0, 90, 180, 270])
     w.rx_panel.refresh(); w.rx_panel.dose.setValue(70); w.rx_panel.fx.setValue(35); w.rx_panel.method.setCurrentText("mean")
+    w.rx_panel.target.setCurrentText("PTV")
     w.rx_panel.calculate()
     app.processEvents()
     p = w.state.plan
     assert p.dose is not None and all(b.mu > 0 for b in p.beams)
     from pytps.core.plan import dvh
     d = dvh(p, w.state.engine, "PTV")
+    print("rx", p.rx, "PTV mean", d["mean"], "MU", [b.mu for b in p.beams])
+    assert p.rx.target == "PTV" and p.rx.method == "mean"
     assert abs(d["mean"] - 70) < 1.5
     w.beams_panel.add_arc(); app.processEvents()
     w.views[3].setCurrentIndex(1); app.processEvents(); w.views[3].setCurrentIndex(0); app.processEvents()
