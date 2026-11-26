@@ -358,3 +358,7 @@ python harness/check_thesis.py --docx "Full Draft/VMAT-TBI_MSc_Thesis_DEMO_compl
 | **کاظم رادفر (Kazim Radfar)** | همکار پروژه ([@kazimradfar](https://github.com/kazimradfar)) |
 
 </div>
+
+## PyTPS
+
+The teaching planning system PyTPS has moved to its own repository: https://github.com/kazimradfar/PyTPS
