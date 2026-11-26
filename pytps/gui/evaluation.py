@@ -153,11 +153,13 @@ def draw_dvh(p, rect, state, curves, cmp_curves):
         xs = L + (R - L) * d["dose"] / dmax; ys = B - (B - T) * d["volume"] / 100
         p.drawPolyline(QPolygonF([QPointF(x, y) for x, y in zip(xs, ys)]))
         return c
+    p.save(); p.setClipRect(QRectF(L, T - 2, R - L, B - T + 4))
     for _, (col, d) in cmp_curves.items():
         curve(col, d, True)
+    shown = [(name, col, d, curve(col, d, False)) for name, (col, d) in curves.items()]
+    p.restore()
     ly = T + 12
-    for name, (col, d) in curves.items():
-        c = curve(col, d, False)
+    for name, col, d, c in shown:
         p.setPen(c); p.drawText(QPointF(R + 10, ly), f"{name}  {d['mean']:.1f} Gy"); ly += 15
     if cmp_curves and state.compare is not None:
         p.setPen(QColor(90, 100, 115)); p.drawText(QPointF(R + 10, ly + 6), f"dashed: {state.compare.name}")
@@ -499,7 +501,8 @@ class ProfileWidget(_PlotMenu, QWidget):
             return
         t, d = self._line(pl)
         rx = pl.rx.dose
-        L, R, T, B = 48, width - 12, 22, height - 26
+        wide = width > 600
+        L, R, T, B = (100 if wide else 48), width - 12, 22, height - 26
         dmax = max(np.nanmax(d) if np.isfinite(d).any() else rx, rx) * 1.12
         X = lambda v: L + (R - L) * (v - t[0]) / (t[-1] - t[0]); Y = lambda v: B - (B - T) * v / dmax
         # field extents along z of each isocentre
@@ -512,11 +515,14 @@ class ProfileWidget(_PlotMenu, QWidget):
                 lo = min(b.iso[2] + b.y1 for b in bs); hi = max(b.iso[2] + b.y2 for b in bs)
                 p.fillRect(QRectF(X(lo), T, X(hi) - X(lo), B - T), cols[k % len(cols)])
         p.setPen(QColor(222, 227, 233))
-        for f in (0.9, 1.0, 1.1):
+        ticks = (0.9, 1.0, 1.1) if B - T < 140 else (0.0, 0.25, 0.5, 0.75, 0.9, 1.0, 1.1)
+        for f in ticks:
             p.drawLine(QPointF(L, Y(f * rx)), QPointF(R, Y(f * rx)))
         p.setPen(QColor(90, 100, 115)); f = QFont(); f.setPointSizeF(8.5); p.setFont(f)
-        for fr in (0.9, 1.0, 1.1):
-            p.drawText(QPointF(L - 40, Y(fr * rx) + 4), f"{fr * 100:.0f}%")
+        for fr in ticks:
+            gy = fr * rx
+            p.drawText(QRectF(2, Y(gy) - 8, L - 6, 16), Qt.AlignRight | Qt.AlignVCenter,
+                       f"{fr * 100:.0f}% · {gy:.3g} Gy" if wide else f"{fr * 100:.0f}%")
         step = 100 if (t[-1] - t[0]) > 500 else 50
         for v in np.arange(np.ceil(t[0] / step) * step, t[-1], step):
             p.drawText(QPointF(X(v) - 10, B + 14), f"{v / 10:g}")
