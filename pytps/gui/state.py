@@ -24,8 +24,25 @@ class AppState(QObject):
         self.undo_stack: list = []
         self.redo_stack: list = []
         self.plan = None
-        self.dose = None
+        self.engine = None                   # dose engine (built on the first calculation)
+        self.engine_version = None
+        self.density_version = 0
+        self.cur_beam = None
+        self.cp_index = 0
         self.source = ""                     # "phantom: ..." or "DICOM"
+        self._models = None
+        self.changed.connect(self._density_watch)
+
+    @property
+    def models(self):
+        if self._models is None:
+            from ..core.beamdata import default_models
+            self._models = default_models()
+        return self._models
+
+    def _density_watch(self, what):
+        if what == "density":
+            self.density_version += 1
 
     # ------------------------------------------------------------------ data
     def set_case(self, image, ss, source=""):
@@ -39,7 +56,7 @@ class AppState(QObject):
             self.cursor = np.array([(a + b) / 2 for a, b in ext])
         self.active = tgt.name if tgt else (ss.structures[0].name if ss.structures else None)
         self.undo_stack.clear(); self.redo_stack.clear()
-        self.plan = None; self.dose = None
+        self.plan = None; self.engine = None; self.engine_version = None; self.cur_beam = None; self.cp_index = 0
         self.changed.emit("image")
 
     def set_cursor(self, p):
