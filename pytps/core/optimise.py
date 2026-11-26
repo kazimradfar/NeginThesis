@@ -543,16 +543,18 @@ class Optimiser:
 def default_costs(plan: Plan, ss):
     """Starting cost functions: target penalty and overdose on the target, parallel / serial on organs, body maximum."""
     rx = plan.rx.dose
-    costs = [Cost(plan.rx.target, "Target Penalty", rx, 95), Cost(plan.rx.target, "Quadratic Overdose", round(rx * 1.04, 1), 0.5)]
+    costs = [Cost(plan.rx.target, "Target Penalty", rx, 95, 2.0), Cost(plan.rx.target, "Quadratic Overdose", round(rx * 1.05, 1), 0.5)]
     for s in ss.structures:
         n = s.name.lower()
         if s.type == "EXTERNAL":
             costs.append(Cost(s.name, "Maximum Dose", round(rx * 1.1, 1)))
-            costs.append(Cost(s.name, "Conformality", rx, 25, 0.3))
+            costs.append(Cost(s.name, "Conformality", rx, 25, 0.2))
         elif s.is_target or not s.mask.any():
             continue
         elif any(k in n for k in ("cord", "stem", "chiasm", "nerve", "bowel", "rectum", "esoph")):
             costs.append(Cost(s.name, "Serial", round(min(rx * 0.7, 45), 1), 12))
+        elif any(k in n for k in ("mandib", "femhead", "femoral", "bone")):
+            costs.append(Cost(s.name, "Maximum Dose", round(rx * 1.05, 1)))
         else:
-            costs.append(Cost(s.name, "Parallel", round(rx * 0.35, 1), 30))
+            costs.append(Cost(s.name, "Parallel", round(rx * 0.4, 1), 40))
     return costs

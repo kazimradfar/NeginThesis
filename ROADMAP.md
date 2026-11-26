@@ -5,7 +5,7 @@ Import (DICOM CT + RT Structure Set, phantoms), viewer, contouring, manual beams
 conformal, manual), wedges, divergent beam display, BEV with DRR, 3D model, pencil-beam dose, MU,
 normalisation, isodoses, DVH, statistics.
 
-## 0.2 (next)
+## 0.2 (done)
 1. IMRT Constraints tab: cost functions per structure (target penalty, target EUD, quadratic under/overdose,
    under/overdose DVH, maximum dose, serial, parallel, conformality), objective or constraint, weights,
    layering; achieved values shown after optimisation.
@@ -19,3 +19,10 @@ normalisation, isodoses, DVH, statistics.
 5. Beam data editor (Tools menu): PDD, output factors, wedge factors, refit and show the fit quality.
 6. Point doses, clinical goals with pass/fail, PDF plan report.
 7. Tests for each item; screenshots in CI; Windows build.
+
+## 0.3 (ideas)
+- Virtual QA: detector array and gamma analysis of a plan; film in a phantom.
+- Guided exercises with automatic checks (for courses).
+- Persian / English interface.
+- Direct aperture optimisation for VMAT with leaf-speed and dose-rate limits enforced.
+- Couch model and support structures; DRR export.
