@@ -45,6 +45,8 @@ jobs:
           python -m pytps --phantom "Thorax (lung tumour)" --demo-plan 0,60,180,300 --workspace Planning --size 1366x768 --screenshot shots/thorax_plan.png
           python -m pytps --phantom "Pelvis (prostate)" --demo-plan 0,90,180,270 --dose-mode wash --workspace Evaluation --size 1920x1080 --screenshot shots/pelvis_box.png
           python -m pytps --phantom "Breast (left)" --demo-plan 305,125 --size 1600x900 --layout 1+3 --screenshot shots/breast.png
+          python -m pytps --phantom "Pelvis (prostate)" --demo-plan 0,52,104,156,204,256,308 --optimise 60 --workspace Planning --size 1600x900 --screenshot shots/prostate_imrt.png
+          python -m pytps --phantom "Thorax (lung tumour)" --demo-plan 0 --arc --optimise 40 --workspace Evaluation --size 1600x900 --screenshot shots/lung_vmat.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:

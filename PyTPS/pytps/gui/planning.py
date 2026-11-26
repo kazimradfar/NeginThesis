@@ -117,7 +117,7 @@ class BeamsPanel(QWidget):
             for c, name in enumerate(COLS):
                 if name in ("Energy", "Type", "MLC", "Wedge"):
                     cb = QComboBox()
-                    opts = {"Energy": list(st.models), "Type": ["STATIC", "ARC"], "MLC": ["open", "conformal", "manual"], "Wedge": ["0", "15", "30", "45", "60"]}[name]
+                    opts = {"Energy": list(st.models), "Type": ["STATIC", "ARC"], "MLC": ["open", "conformal", "manual", "optimised"], "Wedge": ["0", "15", "30", "45", "60"]}[name]
                     cb.addItems(opts)
                     cb.setCurrentText({"Energy": b.energy, "Type": b.kind, "MLC": b.mlc_mode, "Wedge": str(int(b.wedge.angle))}[name])
                     cb.currentTextChanged.connect(lambda t, b=b, name=name: self._combo(b, name, t))

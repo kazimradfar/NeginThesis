@@ -171,11 +171,16 @@ class CPOp:
         return (M[i0, j0] * (1 - fu) * (1 - fv) + M[i0 + 1, j0] * fu * (1 - fv) + M[i0, j0 + 1] * (1 - fu) * fv + M[i0 + 1, j0 + 1] * fu * fv)
 
     def _splat(self, val):
-        M = np.zeros(self.P, np.float64)
-        i0, j0, fu, fv = self.i0, self.j0, self.fu, self.fv
-        np.add.at(M, (i0, j0), val * (1 - fu) * (1 - fv)); np.add.at(M, (i0 + 1, j0), val * fu * (1 - fv))
-        np.add.at(M, (i0, j0 + 1), val * (1 - fu) * fv); np.add.at(M, (i0 + 1, j0 + 1), val * fu * fv)
-        return M
+        if not hasattr(self, "_flat"):
+            PV = self.P[1]
+            self._flat = (self.i0 * PV + self.j0, (self.i0 + 1) * PV + self.j0, self.i0 * PV + self.j0 + 1, (self.i0 + 1) * PV + self.j0 + 1)
+            fu, fv = self.fu, self.fv
+            self._wts = ((1 - fu) * (1 - fv), fu * (1 - fv), (1 - fu) * fv, fu * fv)
+        n = self.P[0] * self.P[1]
+        M = np.zeros(n)
+        for idx, w in zip(self._flat, self._wts):
+            M += np.bincount(idx, val * w, minlength=n)
+        return M.reshape(self.P)
 
     def forward(self, F, out):
         """Add this control point's dose (cGy, for fluence F in MU) to out (voxel array)."""

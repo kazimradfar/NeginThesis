@@ -15,6 +15,7 @@ from .beamviews import BeamViews
 from .evaluation import DVHWidget, EvaluationPanel
 from .overlays import BeamOverlay, DoseOverlay
 from .panels import ContourPanel, PatientPanel
+from .optim_panels import ConstraintsPanel, OptimisationPanel
 from .planning import BeamsPanel, PrescriptionPanel
 from .sliceview import SliceView
 from .state import WL_PRESETS, AppState
@@ -105,10 +106,8 @@ class MainWindow(QMainWindow):
         self.planning = QTabWidget()
         self.beams_panel = BeamsPanel(st); self.rx_panel = PrescriptionPanel(st)
         self.planning.addTab(self.beams_panel, "Beams"); self.planning.addTab(self.rx_panel, "Prescription")
-        for t, txt in (("IMRT Constraints", "IMRT constraints: cost functions per structure (target penalty, EUD, serial, parallel, DVH points, conformality)."),
-                       ("Optimisation", "Stage 1 fluence and Stage 2 segment optimisation for IMRT and VMAT.")):
-            lab = QLabel(txt + "\n\n(Next PyTPS version.)"); lab.setWordWrap(True); lab.setAlignment(Qt.AlignTop)
-            lab.setMargin(10); self.planning.addTab(lab, t)
+        self.cost_panel = ConstraintsPanel(st); self.opt_panel = OptimisationPanel(st)
+        self.planning.addTab(self.cost_panel, "IMRT Constraints"); self.planning.addTab(self.opt_panel, "Optimisation")
         self.work.addTab(self.planning, "Planning")
         self.evaluation = EvaluationPanel(st)
         self.work.addTab(self.evaluation, "Evaluation")
@@ -192,7 +191,9 @@ class MainWindow(QMainWindow):
         m.addAction(self._act("Add opposed beam", lambda: (self.show_planning(0), self.beams_panel.opposed())))
         m.addAction(self._act("Isocentre to target centre", lambda: (self.show_planning(0), self.beams_panel.iso_target())))
         m.addAction(self._act("Prescription…", lambda: self.show_planning(1)))
+        m.addAction(self._act("IMRT constraints…", lambda: self.show_planning(2)))
         m.addSeparator(); m.addAction(self.a_calc)
+        m.addAction(self._act("Optimise (Stage 1 + 2)", lambda: (self.show_planning(3), self.opt_panel.both()), shortcut="F6"))
         dm = m.addMenu("Dose display")
         dg = QActionGroup(self)
         for k, n in (("lines", "Isodose lines"), ("wash", "Colour wash"), ("off", "Off")):

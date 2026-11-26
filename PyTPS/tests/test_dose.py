@@ -43,3 +43,22 @@ def test_lung_increases_dose_behind_it():
     with_lung = eng.beam_dose_per_mu(b, p)[0]
     lung.density = None; eng.refresh_density()
     assert with_lung > 1.2 * eng.beam_dose_per_mu(b, p)[0]
+
+
+def test_optimiser_spares_rectum():
+    from pytps.core.optimise import Optimiser, OptSettings, default_costs
+    from pytps.core.plan import Plan, dvh
+    img, ss = phantoms.pelvis()
+    eng = DoseEngine(ss, default_models(), 5.0)
+    p = Plan(); p.rx.target = "PTV"; p.rx.method = "mean"; p.rx.dose, p.rx.fractions = 78, 39
+    k, j, i = [np.mean(a) for a in np.nonzero(ss.get("PTV").mask)]
+    iso = img.index_to_world((i, j, k))
+    for g in (0, 72, 144, 216, 288):
+        b = Beam(f"G{g}", iso.copy(), gantry=g, x1=-50, x2=50, y1=-45, y2=45); b.mlc_mode = "optimised"; p.beams.append(b)
+    costs = default_costs(p, ss)
+    opt = Optimiser(p, eng, costs, OptSettings(iterations=40, stage2_iterations=15))
+    opt.stage1(); opt.stage2(); opt.finish()
+    assert all(b.cps for b in p.beams)
+    ptv, rect = dvh(p, eng, "PTV"), dvh(p, eng, "Rectum")
+    assert abs(ptv["mean"] - 78) < 2
+    assert rect["mean"] < 30            # open 5-field plan: about 37 Gy
