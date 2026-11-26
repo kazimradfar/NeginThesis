@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QGridLayout, QLabel, QMainWindow, QMessageBox,
@@ -19,6 +20,9 @@ from .optim_panels import ConstraintsPanel, OptimisationPanel
 from .planning import BeamsPanel, PrescriptionPanel
 from .sliceview import SliceView
 from .state import WL_PRESETS, AppState
+
+
+SOURCE_URL = "https://github.com/kazimradfar/NeginThesis/tree/pytps/PyTPS"
 
 
 class Placeholder(QWidget):
@@ -38,19 +42,56 @@ class Placeholder(QWidget):
         p.end()
 
 
+VIEW_NAMES = ["Transverse", "Coronal", "Sagittal", "BEV", "3D", "Room"]
+
+
 class ViewGrid(QWidget):
-    """Image views in 2 x 2, single, or one large + three small layouts. The focused view is enlarged."""
+    """Image views in 2 x 2, single, or one large + three small layouts. The focused view is enlarged.
+
+    The fourth view holds the beam's eye view, the 3D model and the room view as tabs; any of them can be the
+    single or large view (View ▸ Main view, the toolbar list, or a click into the view)."""
 
     def __init__(self, views, parent=None):
         super().__init__(parent)
         self.views = views
         self.focus = views[0]
         self.mode = "4"
+        self.on_focus = []             # callbacks(name) when the main view changes
         self.grid = QGridLayout(self); self.grid.setContentsMargins(2, 2, 2, 2); self.grid.setSpacing(3)
         for v in views:
             if isinstance(v, SliceView):
                 v.activated.connect(self.set_focus)
+        bv = views[3]
+        if isinstance(bv, QTabWidget):
+            for w in [bv.widget(i) for i in range(bv.count())] + [bv.tabBar()]:
+                w.installEventFilter(self)
+            bv.currentChanged.connect(lambda _i: self._notify() if self.focus is bv else None)
         self.apply()
+
+    def eventFilter(self, obj, ev):
+        from PySide6.QtCore import QEvent
+        if ev.type() == QEvent.MouseButtonPress:
+            self.set_focus(self.views[3])
+        return False
+
+    def current_name(self):
+        i = self.views.index(self.focus)
+        if i < 3:
+            return VIEW_NAMES[i]
+        bv = self.views[3]
+        return VIEW_NAMES[3 + bv.currentIndex()] if isinstance(bv, QTabWidget) else "BEV"
+
+    def show_view(self, name):
+        """Make a view the main (single / large) view: Transverse, Coronal, Sagittal, BEV, 3D or Room."""
+        i = VIEW_NAMES.index(name)
+        if i >= 3 and isinstance(self.views[3], QTabWidget):
+            self.views[3].setCurrentIndex(i - 3)
+        self.set_focus(self.views[min(i, 3)])
+        self._notify()
+
+    def _notify(self):
+        for f in self.on_focus:
+            f(self.current_name())
 
     def set_focus(self, v):
         if v is self.focus:
@@ -58,6 +99,7 @@ class ViewGrid(QWidget):
         self.focus = v
         if self.mode != "4":
             self.apply()
+        self._notify()
 
     def set_mode(self, mode):
         self.mode = mode
@@ -120,6 +162,7 @@ class MainWindow(QMainWindow):
         self.log = QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(500)
         self.profile = ProfileWidget(st)
         self.lower.addTab(self.dvh, "DVH"); self.lower.addTab(self.profile, "Profile"); self.lower.addTab(self.log, "Messages")
+        self.evaluation.dvh_widget = self.dvh
 
         right = QSplitter(Qt.Vertical); right.addWidget(self.grid); right.addWidget(self.lower)
         right.setStretchFactor(0, 4); right.setStretchFactor(1, 1); right.setSizes([650, 200])
@@ -161,7 +204,16 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self.a_export = self._act("Export RT Structure Set…", self.export_rtstruct, icons.save(), "Ctrl+E")
         m.addAction(self.a_export)
-        m.addAction(self._act("Save screenshot…", self.save_screenshot, icons.camera(), "Ctrl+P"))
+        em = m.addMenu(icons.camera(), "Export image / data")
+        em.addAction(self._act("Main view as image…", self.save_view_image, shortcut="Ctrl+Shift+P"))
+        em.addAction(self._act("Whole window as image…", self.save_screenshot, shortcut="Ctrl+P"))
+        em.addSeparator()
+        em.addAction("DVH as image…", lambda: self.dvh.save_image())
+        em.addAction("DVH data (CSV)…", lambda: self.dvh.save_csv())
+        em.addAction("Dose statistics (CSV)…", lambda: self.evaluation.export())
+        em.addSeparator()
+        em.addAction("Dose profile as image…", lambda: self.profile.save_image())
+        em.addAction("Dose profile data (CSV)…", lambda: self.profile.save_csv())
         m.addSeparator(); m.addAction(self._act("Exit", self.close, shortcut="Ctrl+Q"))
         # Edit
         m = mb.addMenu("&Edit")
@@ -173,7 +225,11 @@ class MainWindow(QMainWindow):
         for key, name, ic in (("4", "2 × 2 views", icons.layout("4")), ("1+3", "One large + three small", icons.layout("3")), ("1", "Single view", icons.layout("1"))):
             a = self._act(name, lambda _=False, k=key: self.grid.set_mode(k), ic, checkable=True); lg.addAction(a); m.addAction(a); self.layout_acts[key] = a
         self.layout_acts["4"].setChecked(True)
+        vm = m.addMenu("Main view (single / large)")
+        for k, n in enumerate(VIEW_NAMES):
+            vm.addAction(self._act(n, lambda _=False, n=n: self.grid.show_view(n), shortcut=f"Alt+{k + 1}"))
         m.addSeparator()
+        a = self._act("Dose colour bar / isodose legend", self.show_legend, checkable=True); a.setChecked(True); m.addAction(a)
         wm = m.addMenu("Window / level")
         for n, (lv, w) in WL_PRESETS.items():
             wm.addAction(f"{n} ({w:.0f}/{lv:.0f})", lambda lv=lv, w=w: st.set_window(lv, w))
@@ -220,6 +276,7 @@ class MainWindow(QMainWindow):
         m.addAction(self._act("Measure distance", lambda: self.set_tool("ruler"), icons.ruler()))
         m.addAction(self._act("Beam data and model…", self.beam_data))
         m = mb.addMenu("&Help")
+        m.addAction(self._act("User manual", self.show_manual, shortcut="Shift+F1"))
         m.addAction(self._act("Guided exercise: VMAT-TBI (thesis)", self.show_guide, shortcut="F1"))
         m.addSeparator()
         m.addAction(self._act("About PyTPS", self.about))
@@ -232,6 +289,10 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         for k in ("4", "1+3", "1"):
             tb.addAction(self.layout_acts[k])
+        self.mainview = QComboBox(); self.mainview.addItems(VIEW_NAMES)
+        self.mainview.setToolTip("Main view: shown alone in the single layout and large in the one + three layout")
+        self.mainview.textActivated.connect(self.grid.show_view); tb.addWidget(self.mainview)
+        self.grid.on_focus.append(self._main_view_changed)
         tb.addSeparator()
         self.wl = QComboBox(); self.wl.addItems(list(WL_PRESETS)); self.wl.setToolTip("Window / level preset")
         self.wl.currentTextChanged.connect(lambda n: st.set_window(*WL_PRESETS[n]))
@@ -384,12 +445,13 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.warning(self, "RT Plan", str(e))
 
-    def export_rtdose(self):
+    def export_rtdose(self, path=None):
         from ..core import dicomio
         st = self.state
         if not self._need_dose():
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Export RT Dose", f"RD_{st.plan.name}.dcm", "DICOM (*.dcm)")
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, "Export RT Dose", f"RD_{st.plan.name}.dcm", "DICOM (*.dcm)")
         if path:
             try:
                 dicomio.save_rtdose(path, st.engine.grid.to_volume(st.plan.dose), st.engine.grid.spacing, st.engine.grid.origin, st.image)
@@ -420,7 +482,7 @@ class MainWindow(QMainWindow):
         st.plans.append(p); self.set_plan(p)
         self._message(f"Imported {len(beams)} beams. Calculate the dose to see it with the PyTPS beam model.")
 
-    def import_rtdose(self):
+    def import_rtdose(self, path=None):
         from ..core import dicomio
         from ..core.dose_pb import DoseEngine
         from ..core.plan import Plan
@@ -428,7 +490,8 @@ class MainWindow(QMainWindow):
         st = self.state
         if st.image is None:
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Import RT Dose", "", "DICOM (*.dcm);;All files (*)")
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self, "Import RT Dose", "", "DICOM (*.dcm);;All files (*)")
         if not path:
             return
         try:
@@ -508,6 +571,31 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Export", str(e)); return
         self._message(f"RT Structure Set written: {os.path.basename(path)}")
 
+    def _main_view_changed(self, name):
+        if hasattr(self, "mainview"):
+            self.mainview.blockSignals(True); self.mainview.setCurrentText(name); self.mainview.blockSignals(False)
+
+    def show_legend(self, on):
+        self.dose_ov.show_legend = bool(on)
+        for v in self.views[:3]:
+            v.update()
+
+    def save_view_image(self, path=None):
+        """Save the main view (the focused slice view, or the BEV / 3D / room view) as PNG."""
+        v = self.grid.focus
+        w = v.currentWidget() if isinstance(v, QTabWidget) else v
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, "Save view as image", f"PyTPS_{self.grid.current_name()}.png", "PNG (*.png);;JPEG (*.jpg)")
+        if path:
+            w.grab().save(path)
+            self._message(f"Image written: {path}")
+
+    def show_manual(self):
+        from .manual import ManualDialog
+        if getattr(self, "manual", None) is None:
+            self.manual = ManualDialog(self)
+        self.manual.show(); self.manual.raise_()
+
     def save_screenshot(self, path=None):
         if not path:
             path, _ = QFileDialog.getSaveFileName(self, "Save screenshot", "PyTPS.png", "PNG (*.png)")
@@ -515,8 +603,12 @@ class MainWindow(QMainWindow):
             self.grab().save(path)
 
     def about(self):
-        QMessageBox.about(self, "About PyTPS", f"<b>PyTPS {__version__}</b><br>Educational treatment planning system for "
-                          f"teaching medical physics students.<br><br>{DISCLAIMER}<br><br>MIT licence.")
+        QMessageBox.about(self, "About PyTPS",
+                          f"<b>PyTPS {__version__}</b><br>Educational radiotherapy treatment planning system for "
+                          f"teaching medical physics students.<br><br>"
+                          f"Developed by <b>Kazim Radfar</b>, PhD student in Medical Physics.<br><br>"
+                          f"{DISCLAIMER}<br><br>Open source under the MIT licence.<br>"
+                          f"Source code and user manual: <a href='{SOURCE_URL}'>{SOURCE_URL}</a>")
 
     def _message(self, text):
         self.status.setText(text)

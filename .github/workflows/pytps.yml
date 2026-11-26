@@ -50,6 +50,9 @@ jobs:
           python -m pytps --phantom "Head and neck" --demo-plan 0 --arc --optimise 40 --workspace Planning --layout 1+3 --size 1920x1080 --screenshot shots/hn_vmat.png
           python -m pytps --guide-tbi --size 1920x1080 --beam-tab Room --screenshot shots/tbi_guide.png
           python -m pytps --phantom "Pelvis (prostate)" --demo-plan 0,90,180,270 --beam-tab Room --size 1600x900 --screenshot shots/room.png
+          python -m pytps --phantom "Pelvis (prostate)" --demo-plan 0,90,180,270 --dose-mode wash --layout 1+3 --size 1600x900 --screenshot shots/wash_legend.png
+          python -m pytps --phantom "Thorax (lung tumour)" --demo-plan 0,60,180,300 --layout 1 --main-view 3D --size 1366x768 --screenshot shots/single_3d.png
+          python -m pytps --phantom "Pelvis (prostate)" --demo-plan 0,90,180,270 --export shots/pelvis --size 1366x768 --screenshot shots/pelvis_export.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -82,7 +85,7 @@ jobs:
           cache-dependency-path: PyTPS/requirements.txt
       - run: python -m pip install -r requirements.txt pyinstaller
       - name: Build PyTPS.exe
-        run: python -m PyInstaller --noconfirm --clean --windowed --name PyTPS --icon pytps/resources/pytps.ico --add-data "pytps/resources;pytps/resources" --collect-submodules pydicom --collect-submodules skimage.measure run_pytps.py
+        run: python -m PyInstaller --noconfirm --clean --windowed --name PyTPS --icon pytps/resources/pytps.ico --add-data "pytps/resources;pytps/resources" --add-data "docs;docs" --collect-submodules pydicom --collect-submodules skimage.measure run_pytps.py
       - name: Self-test of the built program
         shell: pwsh
         run: |

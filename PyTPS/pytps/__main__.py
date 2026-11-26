@@ -14,11 +14,13 @@ def main(argv=None):
     ap.add_argument("--tool", default="", help="toolbar tool to select")
     ap.add_argument("--size", default="1500x900", help="window size WxH")
     ap.add_argument("--demo-plan", default="", help="add demo beams and calculate, e.g. '0,90,180,270' (gantry angles)")
-    ap.add_argument("--dose-mode", default="lines", choices=["lines", "wash", "off"])
+    ap.add_argument("--dose-mode", default="lines", choices=["lines", "wash", "difference", "off"])
     ap.add_argument("--optimise", type=int, default=0, help="with --demo-plan: optimise the beams (Stage 1 iterations)")
     ap.add_argument("--arc", action="store_true", help="with --demo-plan: use one arc instead of static fields")
     ap.add_argument("--guide-tbi", action="store_true", help="open the VMAT-TBI guided exercise and do all steps (demo)")
     ap.add_argument("--beam-tab", default="", help="BEV, 3D or Room")
+    ap.add_argument("--main-view", default="", help="main view: Transverse, Coronal, Sagittal, BEV, 3D or Room")
+    ap.add_argument("--export", default="", help="with --demo-plan: write DVH/profile images and CSV files with this prefix (for tests)")
     ap.add_argument("--screenshot", help="save a screenshot after start and quit (for tests)")
     ap.add_argument("--self-test", dest="self_test", help="run a short check of the installed program and write the result (JSON)")
     a = ap.parse_args(argv)
@@ -67,6 +69,11 @@ def main(argv=None):
         i = {"bev": 0, "3d": 1, "room": 2}.get(a.beam_tab.lower(), 0)
         w.beamviews.setCurrentIndex(i)
     w.grid.set_mode(a.layout)
+    if a.main_view:
+        w.grid.show_view(a.main_view)
+    if a.export and w.state.plan is not None and w.state.plan.dose is not None:
+        w.dvh.save_image(a.export + "_dvh.png"); w.dvh.save_csv(a.export + "_dvh.csv")
+        w.profile.save_image(a.export + "_profile.png"); w.profile.save_csv(a.export + "_profile.csv")
     if a.workspace:
         for i in range(w.work.count()):
             if w.work.tabText(i).lower() == a.workspace.lower():

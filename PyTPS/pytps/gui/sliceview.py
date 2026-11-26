@@ -121,6 +121,9 @@ class SliceView(QWidget):
         self._draw_cursor(p, S)
         self._draw_tools(p, S, s)
         self._draw_labels(p, s)
+        for ov in self.overlays:               # legends on top of everything
+            if hasattr(ov, "legend"):
+                ov.legend(p, self)
         p.end()
 
     def _draw_structures(self, p, S):
