@@ -1,0 +1,485 @@
+{
+  "note": "Demonstration values: means of the results of studies cited in the thesis. Not measurements.",
+  "plan": {
+    "A": {
+      "MU": 936,
+      "dose_rate": 217,
+      "beam_on": 4.3
+    },
+    "B": {
+      "MU": 1351,
+      "dose_rate": 248,
+      "beam_on": 5.4
+    },
+    "C": {
+      "MU": 1294,
+      "dose_rate": 240,
+      "beam_on": 5.4
+    },
+    "total": {
+      "MU": 3581,
+      "beam_on": 15.1
+    }
+  },
+  "planning_time_h": 5.2,
+  "iso_distance": {
+    "A–B": 27.0,
+    "B–C": 29.5
+  },
+  "dvh": {
+    "PTV_V90": 98.8,
+    "PTV_V95": 96.5,
+    "PTV_D98": 11.0,
+    "PTV_D50": 12.0,
+    "PTV_D2": 12.8,
+    "PTV_Dmean": 12.0,
+    "HI": 0.15,
+    "body_Dmax": 14.2,
+    "lung_mean": 8.8,
+    "lung_R_mean": 8.8,
+    "lung_L_mean": 8.9,
+    "lung_V8": 60.0,
+    "lung_V10": 41.0,
+    "lung_V12": 4.5,
+    "lung_V12_check": 4.4,
+    "lung_refs": [
+      13,
+      16,
+      17,
+      32,
+      46,
+      71,
+      72
+    ],
+    "lung_n": 7,
+    "D2_rel": 106.7,
+    "D98_rel": 91.7,
+    "Dmax_rel": 118.3
+  },
+  "lung_core_factor": 0.55,
+  "gamma": {
+    "Isocentre A": {
+      "g33": 99.6,
+      "g32": 98.4
+    },
+    "Isocentre B": {
+      "g33": 99.1,
+      "g32": 97.6
+    },
+    "Isocentre C": {
+      "g33": 99.5,
+      "g32": 98.3
+    },
+    "Junction A–B": {
+      "g33": 95.9,
+      "g32": 94.4
+    },
+    "Junction B–C": {
+      "g33": 95.3,
+      "g32": 93.8
+    }
+  },
+  "gamma_means": {
+    "single33": 99.4,
+    "single32": 98.1,
+    "junction33": 95.6,
+    "junction32": 94.1,
+    "n_junction": 11
+  },
+  "calibration": {
+    "a": 6.82,
+    "b": 38.1,
+    "n": 2.62,
+    "R2": 0.9995,
+    "max_resid_ge50": 1.9,
+    "resid_25": 1.2,
+    "max_sd_ge50": 2.1,
+    "netod_200": 0.205,
+    "netod_250": 0.238,
+    "verification_160": 160.7,
+    "verification_diff": 0.5,
+    "R2_green": 0.9988,
+    "R2_blue": 0.9976
+  },
+  "points": [
+    {
+      "level": "Head",
+      "slices": "5/6",
+      "z": 15.0,
+      "type": "iso",
+      "film": 2.03,
+      "film_sd": 0.02,
+      "tps": 2.03,
+      "delta": 0.2,
+      "homog": 2.0,
+      "homog_sd": 0.8
+    },
+    {
+      "level": "Neck",
+      "slices": "8/9",
+      "z": 22.5,
+      "type": "iso",
+      "film": 2.04,
+      "film_sd": 0.02,
+      "tps": 2.02,
+      "delta": 1.0,
+      "homog": 2.3,
+      "homog_sd": 0.8
+    },
+    {
+      "level": "Junction A–B",
+      "slices": "11/12",
+      "z": 30.0,
+      "type": "junction",
+      "film": 1.92,
+      "film_sd": 0.03,
+      "tps": 1.98,
+      "delta": -3.1,
+      "homog": -3.8,
+      "homog_sd": 1.9
+    },
+    {
+      "level": "Upper thorax",
+      "slices": "13/14",
+      "z": 35.0,
+      "type": "iso",
+      "film": 1.99,
+      "film_sd": 0.02,
+      "tps": 1.99,
+      "delta": -0.2,
+      "homog": -0.4,
+      "homog_sd": 1.4
+    },
+    {
+      "level": "Mid-thorax",
+      "slices": "16/17",
+      "z": 42.5,
+      "type": "iso",
+      "film": 2.05,
+      "film_sd": 0.02,
+      "tps": 2.03,
+      "delta": 0.8,
+      "homog": 2.6,
+      "homog_sd": 0.8
+    },
+    {
+      "level": "Lower thorax",
+      "slices": "19/20",
+      "z": 50.0,
+      "type": "iso",
+      "film": 2.03,
+      "film_sd": 0.02,
+      "tps": 2.04,
+      "delta": -0.5,
+      "homog": 1.8,
+      "homog_sd": 0.8
+    },
+    {
+      "level": "Junction B–C",
+      "slices": "21/22",
+      "z": 55.0,
+      "type": "junction",
+      "film": 1.97,
+      "film_sd": 0.03,
+      "tps": 2.04,
+      "delta": -3.3,
+      "homog": -1.1,
+      "homog_sd": 2.2
+    },
+    {
+      "level": "Umbilicus (reference)",
+      "slices": "26/27",
+      "z": 67.5,
+      "type": "iso",
+      "film": 1.99,
+      "film_sd": 0.02,
+      "tps": 2.04,
+      "delta": -2.3,
+      "homog": 0.0,
+      "homog_sd": 0.0
+    },
+    {
+      "level": "Pelvis",
+      "slices": "30/31",
+      "z": 77.5,
+      "type": "iso",
+      "film": 1.98,
+      "film_sd": 0.02,
+      "tps": 2.04,
+      "delta": -3.1,
+      "homog": -0.9,
+      "homog_sd": 0.8
+    }
+  ],
+  "points_summary": {
+    "m_iso": 1.1,
+    "m_jun": 3.1,
+    "mean_abs_iso": 1.1,
+    "mean_abs_jun": 3.2,
+    "mean_abs_all": 1.6,
+    "mean_signed": -1.2,
+    "film_min": 1.92,
+    "film_max": 2.05,
+    "paired_t_p": 0.08,
+    "wilcoxon_p": 0.2,
+    "shapiro_p": 0.1,
+    "homog_min": -3.8,
+    "homog_max": 2.6,
+    "cv_max": 1.6
+  },
+  "agreement": {
+    "n_points": 35,
+    "mean_diff": -0.1,
+    "sd": 2.5,
+    "loa_low": -5.0,
+    "loa_high": 4.9,
+    "pct_within3_lowgrad": 87.0,
+    "n_lowgrad": 23,
+    "pct_over5": 3.0,
+    "n_over5": 1,
+    "max_abs": 7.9,
+    "paired_all_p": 0.57
+  },
+  "lung": {
+    "planes": [
+      {
+        "plane": "Upper thorax",
+        "film_fx": 1.48,
+        "film_fx_sd": 0.01,
+        "film_course": 8.9,
+        "tps_course": 8.8,
+        "delta": 1.0,
+        "area_cm2": 180.0
+      },
+      {
+        "plane": "Mid-thorax",
+        "film_fx": 1.45,
+        "film_fx_sd": 0.01,
+        "film_course": 8.7,
+        "tps_course": 8.6,
+        "delta": 1.0,
+        "area_cm2": 236.0
+      },
+      {
+        "plane": "Lower thorax",
+        "film_fx": 1.55,
+        "film_fx_sd": 0.02,
+        "film_course": 9.3,
+        "tps_course": 9.2,
+        "delta": 1.0,
+        "area_cm2": 105.0
+      }
+    ],
+    "weighted_film_course": 8.9,
+    "weighted_film_sd": 0.03,
+    "weighted_film_fx": 1.48,
+    "weighted_tps_course": 8.8,
+    "weighted_delta": 1.0,
+    "film_tps_ratio_lit": 0.97,
+    "p_vs_12": 4.2e-05,
+    "p_vs_10": 0.00016,
+    "central_fx": 1.19,
+    "periphery_fx": 1.81,
+    "margin_to_9_4": 0.5
+  },
+  "film_gamma": {
+    "Head": 99.8,
+    "Neck": 99.3,
+    "Junction A–B": 87.6,
+    "Upper thorax": 90.9,
+    "Mid-thorax": 88.2,
+    "Lower thorax": 94.2,
+    "Junction B–C": 92.6,
+    "Umbilicus (reference)": 98.2,
+    "Pelvis": 94.3
+  },
+  "film_gamma_summary": {
+    "thorax_min": 88.2,
+    "thorax_max": 94.2,
+    "nonthorax_min": 94.3,
+    "nonthorax_max": 99.8,
+    "junction": [
+      87.6,
+      92.6
+    ],
+    "neck": 99.3
+  },
+  "junction_profiles": {
+    "A–B": {
+      "tps_min_rel": -1.4,
+      "film_centre_rel": -4.5
+    },
+    "B–C": {
+      "tps_min_rel": -1.2,
+      "film_centre_rel": -4.5
+    }
+  },
+  "uncertainty": {
+    "components": [
+      [
+        "Reference dose (output calibration)",
+        1.5
+      ],
+      [
+        "Depth dose / TMR data",
+        0.5
+      ],
+      [
+        "Calibration curve fit",
+        1.0
+      ],
+      [
+        "Film non-uniformity and film-to-film variation",
+        1.0
+      ],
+      [
+        "Scanner reproducibility",
+        0.3
+      ],
+      [
+        "Lateral scanner response (central region)",
+        0.5
+      ],
+      [
+        "ROI pixel variation",
+        0.4
+      ]
+    ],
+    "combined": 2.2,
+    "expanded": 4.5
+  },
+  "levels": [
+    {
+      "name": "Head",
+      "slices": "5/6",
+      "z": 15.0,
+      "type": "iso",
+      "points": [
+        "C",
+        "L",
+        "R",
+        "A",
+        "P"
+      ]
+    },
+    {
+      "name": "Neck",
+      "slices": "8/9",
+      "z": 22.5,
+      "type": "iso",
+      "points": [
+        "C",
+        "L",
+        "R"
+      ]
+    },
+    {
+      "name": "Junction A–B",
+      "slices": "11/12",
+      "z": 30.0,
+      "type": "junction",
+      "points": [
+        "C",
+        "L",
+        "R"
+      ]
+    },
+    {
+      "name": "Upper thorax",
+      "slices": "13/14",
+      "z": 35.0,
+      "type": "iso",
+      "points": [
+        "C",
+        "RL",
+        "LL",
+        "CWR",
+        "CWL"
+      ]
+    },
+    {
+      "name": "Mid-thorax",
+      "slices": "16/17",
+      "z": 42.5,
+      "type": "iso",
+      "points": [
+        "C",
+        "RL",
+        "LL",
+        "CWR",
+        "CWL"
+      ]
+    },
+    {
+      "name": "Lower thorax",
+      "slices": "19/20",
+      "z": 50.0,
+      "type": "iso",
+      "points": [
+        "C",
+        "RL",
+        "LL"
+      ]
+    },
+    {
+      "name": "Junction B–C",
+      "slices": "21/22",
+      "z": 55.0,
+      "type": "junction",
+      "points": [
+        "C",
+        "L",
+        "R"
+      ]
+    },
+    {
+      "name": "Umbilicus (reference)",
+      "slices": "26/27",
+      "z": 67.5,
+      "type": "iso",
+      "points": [
+        "C",
+        "L",
+        "R",
+        "A",
+        "P"
+      ]
+    },
+    {
+      "name": "Pelvis",
+      "slices": "30/31",
+      "z": 77.5,
+      "type": "iso",
+      "points": [
+        "C",
+        "L",
+        "R"
+      ]
+    }
+  ],
+  "geometry": {
+    "isocentres": {
+      "A": 15.5,
+      "B": 42.5,
+      "C": 72.0
+    },
+    "fields": {
+      "A": [
+        0.0,
+        31.0
+      ],
+      "B": [
+        29.0,
+        56.0
+      ],
+      "C": [
+        54.0,
+        90.0
+      ]
+    },
+    "junctions": {
+      "A–B": 30.0,
+      "B–C": 55.0
+    }
+  }
+}

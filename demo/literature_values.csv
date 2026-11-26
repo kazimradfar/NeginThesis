@@ -1,0 +1,46 @@
+quantity,study,thesis_ref,value,unit,used_in,note
+plan_MU_head,Curto 2021 (Rando phantom; mean of 2 plans),13,512.05,MU,Table 4.1,field A (head) 533.41 and 490.69
+plan_MU_chest,Curto 2021 (Rando phantom; mean of 2 plans),13,1179.56,MU,Table 4.1,field B (chest) 1199.75 and 1159.37
+plan_MU_abdomen,Curto 2021 (Rando phantom; mean of 2 plans),13,1146.34,MU,Table 4.1,field C (abdomen) 1182.46 and 1110.22
+plan_MU_pelvis,Curto 2021 (Rando phantom; mean of 2 plans),13,743.14,MU,Table 4.1,field D (pelvis) 767.91 and 718.37
+plan_beam_on_total,Curto 2021 (Rando phantom; mean of 2 plans),13,15.28,min,Table 4.1,15.55 and 15.00 min
+dose_rate_head,Curto 2021,13,190.7,MU/min,Table 4.1,field A MU / beam-on time (mean of 2 plans)
+dose_rate_chest,Curto 2021,13,249.6,MU/min,Table 4.1,field B
+dose_rate_abdomen,Curto 2021,13,246.5,MU/min,Table 4.1,field C
+dose_rate_pelvis,Curto 2021,13,234.9,MU/min,Table 4.1,field D
+planning_time,Kumari 2023 (Monaco on Versa HD),30,5.25,h,Results 4.2.1,4.5-6 h; only Monaco study with a reported time
+V90_PTV,Symons 2018,16,98.76,%,Table 4.2,mean of 5 plans (99.1 99.0 98.7 98.3 98.7)
+V95_PTV,Curto 2021 (phantom),13,95.70,%,Table 4.2,95.27 and 96.13
+V95_PTV,Curto 2021 (patients; mean-dose prescription),13,93.96,%,Table 4.2,93.35 and 94.56
+V95_PTV,Symons 2018,16,97.90,%,Table 4.2,mean of 5 plans
+V95_PTV,Springer 2016,15,98.60,%,Table 4.2,mean of 7 patients
+D98_rel,Curto 2021 (phantom),13,0.925,fraction of PTV mean,Table 4.2,11.10 Gy at 12 Gy mean
+D98_rel,Curto 2021 (patients; mean-dose prescription),13,0.908,fraction of PTV mean,Table 4.2,10.84 and 10.95 Gy at 12 Gy mean
+D2_rel,Curto 2021 (phantom),13,1.0606,fraction of PTV mean,Table 4.2,12.725 Gy at 12 Gy mean
+D2_rel,Curto 2021 (patients; mean-dose prescription),13,1.0742,fraction of PTV mean,Table 4.2,13.05 and 12.73 Gy at 12 Gy mean
+Dmax_rel,Kumari 2023 (Monaco),30,1.1828,fraction of PTV mean,Table 4.2,14.428 Gy / 12.198 Gy
+lung_mean,Chakraborty 2015,71,8.65,Gy,Table 4.2,
+lung_mean,Ouyang 2017,32,7.90,Gy,Table 4.2,
+lung_mean,Symons 2018,16,7.56,Gy,Table 4.2,mean of 5 plans
+lung_mean,Tas 2018,17,9.70,Gy,Table 4.2,
+lung_mean,Uehara 2021,46,9.60,Gy,Table 4.2,
+lung_mean,Guo 2021,72,9.40,Gy,Table 4.2,
+lung_mean,Curto 2021 (phantom),13,8.94,Gy,Table 4.2,mean of right and left lung in 2 plans
+lung_V12,Uehara 2021,46,4.5,%,Table 4.2,only study reporting V12Gy
+gamma_single_3_3,Curto 2021 (Delta4),13,99.625,%,Table 4.3,8 single-beam measurements
+gamma_single_3_3,Symons 2018 (ArcCHECK),16,99.2,%,Table 4.3,all arcs
+gamma_single_3_2,Kovalchuk 2022 (portal dosimetry),54,98.1,%,Table 4.3,only study reporting 3%/2 mm for single isocentres
+gamma_junction_3_3,Curto 2021 (Delta4 after 2 mm correction),13,94.30,%,Table 4.3,6 junction measurements
+gamma_junction_3_3,Uehara 2021 (ArcCHECK),46,97.16,%,Table 4.3,5 junctions
+gamma_junction_3_2,Uehara 2021 (ArcCHECK),46,95.64,%,Table 4.3,5 junctions
+pointdose_bias,Tas 2018 (DVH-based 3D QA; PTV mean),17,0.9,%,Table 4.5,plan vs measurement-based reconstruction
+pointdose_bias,Yaray and Damulira 2021 (ArcCHECK; target mean),55,0.93,%,Table 4.5,
+pointdose_bias,Surucu 2012 (TLD in Rando-type phantom; median),29,0.5,%,Table 4.5,range -4.3 to +6.6%
+pointdose_local,Curto 2021 (TLD per slice; Appendix A2),13,see script,%,Table 4.5,central-point differences per slice (mean of 2 measurements)
+lung_film_tps,Tas 2018,17,1.1,%,Table 4.7,mean lung dose plan vs measurement
+lung_film_tps,Yaray and Damulira 2021,55,0.84,%,Table 4.7,mean lung dose plan vs ArcCHECK
+mosfet_in_vivo,Springer 2016,15,3.95,%,Discussion,axilla 3.6% and hip 4.3%
+junction_film_diff,Liang 2013 (film),93,3.9,%,Discussion,absolute dose difference in junction areas
+film_gamma_2d,Liang 2013 (film; 5%/3 mm),93,98.2,%,Results 4.5.6,
+film_gamma_2d,Mancosu 2015 (film; phantom GAI 5%/5 mm),31,99.4,%,Results 4.5.6,
+uncert_reference_dose,IAEA TRS-398,88,1.5,%,Table 4.8,standard uncertainty of absorbed dose to water in a high-energy photon beam
