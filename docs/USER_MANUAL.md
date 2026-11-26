@@ -144,7 +144,7 @@ tested this way before it is published.
 | Workspaces (left) | **Patient**, **Contouring**, **Planning** (Beams, Prescription, IMRT Constraints, Optimisation), **Evaluation** |
 | Image views (centre) | transverse, coronal and sagittal slices and a fourth view with the tabs **BEV**, **3D** and **Room** |
 | Lower area | **DVH**, **Profile** (dose along a line) and **Messages** (log of the session) |
-| Status bar | last message, values under the mouse, and the reminder *EDUCATIONAL · NOT FOR CLINICAL USE* |
+| Status bar | last message and values under the mouse |
 
 The splitters between the areas can be dragged. The four views are linked: a click in one view moves the crosshair
 and the other views follow.

@@ -130,7 +130,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.state = AppState()
-        self.setWindowTitle(f"PyTPS {__version__} — educational treatment planning (not for clinical use)")
+        self.setWindowTitle(f"PyTPS {__version__}")
         self.resize(1500, 900)
         st = self.state
         self.beamviews = BeamViews(st)
@@ -172,8 +172,6 @@ class MainWindow(QMainWindow):
 
         self._build_actions()
         self.status = QLabel(""); self.statusBar().addWidget(self.status, 1)
-        disc = QLabel("EDUCATIONAL · NOT FOR CLINICAL USE"); disc.setStyleSheet("color:#a05a00;font-weight:600;padding-right:8px")
-        self.statusBar().addPermanentWidget(disc)
         st.message.connect(self._message)
         st.changed.connect(self._changed)
 
@@ -441,7 +439,7 @@ class MainWindow(QMainWindow):
         if path:
             try:
                 dicomio.save_rtplan(path, st.plan, st.image)
-                self._message(f"RT Plan written: {os.path.basename(path)} (educational, not for treatment)")
+                self._message(f"RT Plan written: {os.path.basename(path)}")
             except Exception as e:
                 QMessageBox.warning(self, "RT Plan", str(e))
 
@@ -621,5 +619,5 @@ class MainWindow(QMainWindow):
         if what in ("image", "plan", "plans", "dose"):
             self._fill_plans()
         if what == "image" and self.state.image is not None:
-            self.setWindowTitle(f"PyTPS {__version__} — {self.state.image.patient.get('id', '')} — educational, not for clinical use")
+            self.setWindowTitle(f"PyTPS {__version__} — {self.state.image.patient.get('id', '')}")
             self._message(f"Loaded {self.state.source}")
