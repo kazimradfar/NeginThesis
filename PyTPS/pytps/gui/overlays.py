@@ -33,7 +33,7 @@ class DoseOverlay:
         from PySide6.QtGui import QFont, QLinearGradient
         st = self.state
         rx = st.plan.rx.dose
-        small = view.height() < 300 or view.width() < 420     # compact legend: per cent only
+        small = view.height() < 380 or view.width() < 480     # compact legend (per cent only) in small views
         row = 11 if small else 15
         f = QFont(view.font()); f.setPointSizeF(7.0 if small else 8.5); p.setFont(f)
         W = 58 if small else 112
