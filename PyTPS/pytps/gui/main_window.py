@@ -1,0 +1,271 @@
+"""Main window: menu bar, toolbar, workspace panels, linked image views and the lower information area."""
+from __future__ import annotations
+
+import os
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence, QPainter
+from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QGridLayout, QLabel, QMainWindow, QMessageBox,
+                               QPlainTextEdit, QSplitter, QTabWidget, QToolBar, QVBoxLayout, QWidget)
+
+from .. import DISCLAIMER, __version__
+from ..core.phantoms import PHANTOMS
+from . import icons
+from .panels import ContourPanel, PatientPanel
+from .sliceview import SliceView
+from .state import WL_PRESETS, AppState
+
+
+class Placeholder(QWidget):
+    """Fourth view until beams exist (beam's-eye view / 3D)."""
+
+    def __init__(self, title, text, parent=None):
+        super().__init__(parent)
+        self.title, self.text = title, text
+        self.setMinimumSize(160, 140)
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(0, 0, 0))
+        p.setPen(QColor(232, 238, 245)); f = p.font(); f.setBold(True); p.setFont(f); p.drawText(8, 16, self.title)
+        f.setBold(False); p.setFont(f); p.setPen(QColor(140, 152, 168))
+        p.drawText(self.rect().adjusted(20, 20, -20, -20), Qt.AlignCenter | Qt.TextWordWrap, self.text)
+        p.end()
+
+
+class ViewGrid(QWidget):
+    """Image views in 2 x 2, single, or one large + three small layouts. The focused view is enlarged."""
+
+    def __init__(self, views, parent=None):
+        super().__init__(parent)
+        self.views = views
+        self.focus = views[0]
+        self.mode = "4"
+        self.grid = QGridLayout(self); self.grid.setContentsMargins(2, 2, 2, 2); self.grid.setSpacing(3)
+        for v in views:
+            if isinstance(v, SliceView):
+                v.activated.connect(self.set_focus)
+        self.apply()
+
+    def set_focus(self, v):
+        if v is self.focus:
+            return
+        self.focus = v
+        if self.mode != "4":
+            self.apply()
+
+    def set_mode(self, mode):
+        self.mode = mode
+        self.apply()
+
+    def apply(self):
+        for v in self.views:
+            self.grid.removeWidget(v); v.hide()
+        for r in range(3):
+            self.grid.setRowStretch(r, 0); self.grid.setColumnStretch(r, 0)
+        if self.mode == "1":
+            self.grid.addWidget(self.focus, 0, 0); self.focus.show()
+            self.grid.setRowStretch(0, 1); self.grid.setColumnStretch(0, 1)
+        elif self.mode == "1+3":
+            others = [v for v in self.views if v is not self.focus]
+            self.grid.addWidget(self.focus, 0, 0, 3, 1); self.focus.show()
+            for r, v in enumerate(others):
+                self.grid.addWidget(v, r, 1); v.show(); self.grid.setRowStretch(r, 1)
+            self.grid.setColumnStretch(0, 3); self.grid.setColumnStretch(1, 1)
+        else:
+            for n, v in enumerate(self.views):
+                self.grid.addWidget(v, n // 2, n % 2); v.show()
+            for r in range(2):
+                self.grid.setRowStretch(r, 1); self.grid.setColumnStretch(r, 1)
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.state = AppState()
+        self.setWindowTitle(f"PyTPS {__version__} — educational treatment planning (not for clinical use)")
+        self.resize(1500, 900)
+        st = self.state
+        self.views = [SliceView(st, "axial"), SliceView(st, "coronal"), SliceView(st, "sagittal"),
+                      Placeholder("Beam's eye view / 3D", "Add beams in the Planning workspace to see the beam's eye view and the 3D model.")]
+        self.grid = ViewGrid(self.views)
+
+        # workspaces (left)
+        self.work = QTabWidget(); self.work.setTabPosition(QTabWidget.North); self.work.setMinimumWidth(330)
+        self.patient = PatientPanel(st); self.contour = ContourPanel(st)
+        self.work.addTab(self.patient, "Patient")
+        self.work.addTab(self.contour, "Contouring")
+        self.planning = QTabWidget()
+        for t, txt in (("Beams", "Beams: add fields and arcs, isocentre, gantry, collimator, couch, jaws, MLC, wedges."),
+                       ("Prescription", "Prescription: dose, fractions, target and normalisation."),
+                       ("IMRT Constraints", "IMRT constraints: cost functions per structure."),
+                       ("Parameters", "Optimisation and sequencing parameters."),
+                       ("Optimisation", "Stage 1 fluence and Stage 2 segment optimisation.")):
+            lab = QLabel(txt + "\n\n(Coming in the next PyTPS version.)"); lab.setWordWrap(True); lab.setAlignment(Qt.AlignTop)
+            lab.setMargin(10); self.planning.addTab(lab, t)
+        self.work.addTab(self.planning, "Planning")
+        ev = QLabel("Evaluation: DVH, clinical goals, plan comparison, plan sum.\n\n(Coming with the dose calculation.)")
+        ev.setWordWrap(True); ev.setAlignment(Qt.AlignTop); ev.setMargin(10)
+        self.work.addTab(ev, "Evaluation")
+
+        # lower area: DVH / plan summary / log
+        self.lower = QTabWidget()
+        self.dvh = Placeholder("DVH", "Dose-volume histograms appear here after a dose calculation.")
+        self.log = QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(500)
+        self.lower.addTab(self.dvh, "DVH"); self.lower.addTab(self.log, "Messages")
+
+        right = QSplitter(Qt.Vertical); right.addWidget(self.grid); right.addWidget(self.lower)
+        right.setStretchFactor(0, 4); right.setStretchFactor(1, 1); right.setSizes([650, 200])
+        main = QSplitter(Qt.Horizontal); main.addWidget(self.work); main.addWidget(right)
+        main.setStretchFactor(0, 0); main.setStretchFactor(1, 1); main.setSizes([360, 1140])
+        self.setCentralWidget(main)
+
+        self._build_actions()
+        self.status = QLabel(""); self.statusBar().addWidget(self.status, 1)
+        disc = QLabel("EDUCATIONAL · NOT FOR CLINICAL USE"); disc.setStyleSheet("color:#a05a00;font-weight:600;padding-right:8px")
+        self.statusBar().addPermanentWidget(disc)
+        st.message.connect(self._message)
+        st.changed.connect(self._changed)
+
+    # ------------------------------------------------------------------ menus and toolbar
+    def _act(self, text, slot=None, icon=None, shortcut=None, tip=None, checkable=False):
+        a = QAction(text, self)
+        if icon is not None:
+            a.setIcon(icon)
+        if shortcut:
+            a.setShortcut(QKeySequence(shortcut))
+        if tip:
+            a.setToolTip(tip); a.setStatusTip(tip)
+        a.setCheckable(checkable)
+        if slot:
+            a.triggered.connect(slot)
+        return a
+
+    def _build_actions(self):
+        st = self.state
+        mb = self.menuBar()
+        # File
+        m = mb.addMenu("&File")
+        self.a_import = self._act("Import DICOM folder…", lambda: (self.work.setCurrentWidget(self.patient), self.patient.choose_folder()), icons.folder(), "Ctrl+O", "Import CT and RT Structure Set from a folder")
+        m.addAction(self.a_import)
+        pm = m.addMenu(icons.phantom(), "Load practice phantom")
+        for n in PHANTOMS:
+            pm.addAction(n, lambda n=n: self.patient.load_phantom(n))
+        m.addSeparator()
+        self.a_export = self._act("Export RT Structure Set…", self.export_rtstruct, icons.save(), "Ctrl+E")
+        m.addAction(self.a_export)
+        m.addAction(self._act("Save screenshot…", self.save_screenshot, icons.camera(), "Ctrl+P"))
+        m.addSeparator(); m.addAction(self._act("Exit", self.close, shortcut="Ctrl+Q"))
+        # Edit
+        m = mb.addMenu("&Edit")
+        m.addAction(self._act("Undo", st.undo, icons.undo(), "Ctrl+Z")); m.addAction(self._act("Redo", st.redo, icons.undo(True), "Ctrl+Y"))
+        # View
+        m = mb.addMenu("&View")
+        lg = QActionGroup(self)
+        self.layout_acts = {}
+        for key, name, ic in (("4", "2 × 2 views", icons.layout("4")), ("1+3", "One large + three small", icons.layout("3")), ("1", "Single view", icons.layout("1"))):
+            a = self._act(name, lambda _=False, k=key: self.grid.set_mode(k), ic, checkable=True); lg.addAction(a); m.addAction(a); self.layout_acts[key] = a
+        self.layout_acts["4"].setChecked(True)
+        m.addSeparator()
+        wm = m.addMenu("Window / level")
+        for n, (lv, w) in WL_PRESETS.items():
+            wm.addAction(f"{n} ({w:.0f}/{lv:.0f})", lambda lv=lv, w=w: st.set_window(lv, w))
+        m.addAction(self._act("Reset zoom", self.reset_zoom, shortcut="Ctrl+0"))
+        # Contouring
+        m = mb.addMenu("&Contouring")
+        m.addAction(self._act("New structure…", lambda: (self.work.setCurrentWidget(self.contour), self.contour.new()), shortcut="Ctrl+N"))
+        m.addAction(self._act("Delete structure", self.contour.delete))
+        m.addSeparator()
+        for t, f in (("Interpolate", self.contour.interpolate), ("Fill holes", self.contour.fill_holes),
+                     ("Keep largest part", self.contour.largest), ("Body outline from CT", self.contour.auto_body)):
+            m.addAction(t, lambda f=f: (self.work.setCurrentWidget(self.contour), f()))
+        # Planning (next version)
+        m = mb.addMenu("&Planning")
+        for t in ("New plan", "Add field", "Add arc", "Set isocentre", "Prescription…", "Calculate dose", "Optimise"):
+            a = m.addAction(t); a.setEnabled(False)
+        # Tools / Help
+        m = mb.addMenu("&Tools")
+        m.addAction(self._act("Measure distance", lambda: self.set_tool("ruler"), icons.ruler()))
+        m = mb.addMenu("&Help")
+        m.addAction(self._act("About PyTPS", self.about))
+
+        # toolbar
+        tb = QToolBar("Main"); tb.setIconSize(QSize(22, 22)); tb.setMovable(False); self.addToolBar(tb)
+        tb.addAction(self.a_import)
+        b = self._act("Phantom", lambda: self.patient.load_phantom(self.patient.ph.currentText()), icons.phantom(), tip="Load the practice phantom chosen in the Patient panel")
+        tb.addAction(b); tb.addAction(self.a_export)
+        tb.addSeparator()
+        for k in ("4", "1+3", "1"):
+            tb.addAction(self.layout_acts[k])
+        tb.addSeparator()
+        self.wl = QComboBox(); self.wl.addItems(list(WL_PRESETS)); self.wl.setToolTip("Window / level preset")
+        self.wl.currentTextChanged.connect(lambda n: st.set_window(*WL_PRESETS[n]))
+        tb.addWidget(self.wl)
+        tb.addSeparator()
+        tg = QActionGroup(self)
+        self.tool_acts = {}
+        for key, name, ic, tip in (("select", "Crosshair", icons.cross(), "Click to move the crosshair (all views follow)"),
+                                   ("pan", "Pan", icons.pan(), "Drag to move the image (also: middle mouse button)"),
+                                   ("zoom", "Zoom", icons.zoom(), "Drag up / down to zoom (also: Ctrl + wheel)"),
+                                   ("window", "Window / level", icons.contrast(), "Drag to change window and level (also: right mouse button)"),
+                                   ("ruler", "Measure", icons.ruler(), "Drag to measure a distance"),
+                                   ("brush", "Brush", icons.brush(), "Paint the selected structure on the current slice"),
+                                   ("eraser", "Eraser", icons.brush(True), "Erase the selected structure on the current slice"),
+                                   ("polygon", "Polygon", icons.polygon(), "Click points, double-click to close (Shift = subtract)")):
+            a = self._act(name, lambda _=False, k=key: self.set_tool(k), ic, tip=tip, checkable=True)
+            tg.addAction(a); tb.addAction(a); self.tool_acts[key] = a
+        self.tool_acts["select"].setChecked(True)
+        tb.addWidget(QLabel("  Brush "))
+        self.bsize = QDoubleSpinBox(); self.bsize.setRange(1, 50); self.bsize.setValue(10); self.bsize.setSuffix(" mm"); self.bsize.setDecimals(0)
+        self.bsize.valueChanged.connect(lambda v: setattr(st, "brush_mm", v)); tb.addWidget(self.bsize)
+        tb.addSeparator()
+        tb.addAction(self._act("Undo", st.undo, icons.undo(), tip="Undo (Ctrl+Z)")); tb.addAction(self._act("Redo", st.redo, icons.undo(True), tip="Redo (Ctrl+Y)"))
+        tb.addSeparator()
+        tb.addAction(self._act("Screenshot", self.save_screenshot, icons.camera(), tip="Save the window as PNG"))
+
+    # ------------------------------------------------------------------ actions
+    def set_tool(self, k):
+        self.state.set_tool(k)
+        if k in self.tool_acts:
+            self.tool_acts[k].setChecked(True)
+        if k in ("brush", "eraser", "polygon"):
+            self.work.setCurrentWidget(self.contour)
+
+    def reset_zoom(self):
+        for v in self.views:
+            if isinstance(v, SliceView):
+                v.zoom = 1.0; v.pan = v.pan * 0; v.update()
+
+    def export_rtstruct(self):
+        st = self.state
+        if st.ss is None:
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Export RT Structure Set", "RS_PyTPS.dcm", "DICOM (*.dcm)")
+        if not path:
+            return
+        from ..core import dicomio
+        try:
+            dicomio.save_rtstruct(path, st.ss)
+        except Exception as e:
+            QMessageBox.warning(self, "Export", str(e)); return
+        self._message(f"RT Structure Set written: {os.path.basename(path)}")
+
+    def save_screenshot(self, path=None):
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, "Save screenshot", "PyTPS.png", "PNG (*.png)")
+        if path:
+            self.grab().save(path)
+
+    def about(self):
+        QMessageBox.about(self, "About PyTPS", f"<b>PyTPS {__version__}</b><br>Educational treatment planning system for "
+                          f"teaching medical physics students.<br><br>{DISCLAIMER}<br><br>MIT licence.")
+
+    def _message(self, text):
+        self.status.setText(text)
+        if text and not text.startswith("x "):
+            self.log.appendPlainText(text)
+
+    def _changed(self, what):
+        if what == "image" and self.state.image is not None:
+            self.setWindowTitle(f"PyTPS {__version__} — {self.state.image.patient.get('id', '')} — educational, not for clinical use")
+            self._message(f"Loaded {self.state.source}")
