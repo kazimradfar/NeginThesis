@@ -7,7 +7,7 @@ dose calculation and plan evaluation. It has its own design and is not affiliate
 > **Not for clinical use.** PyTPS is not a medical device, is not commissioned for any treatment machine
 > and must not be used to plan, check or deliver patient treatments. The beam data are generic teaching values.
 
-## Features (version 0.1)
+## Features (version 0.2)
 
 - **Patient**: import DICOM CT, RT Structure Set (read locally; names and IDs are replaced by an anonymous
   code), practice phantoms (water, thorax, pelvis, head and neck, breast, whole body for TBI),
@@ -28,13 +28,24 @@ dose calculation and plan evaluation. It has its own design and is not affiliate
 - **Dose**: pencil-beam calculation (fluence convolution with penumbra and scatter kernels, radiological
   depth through the density volume), MU calculation and normalisation (isocentre, mean, D95, D50,
   prescription isodose), isodose lines or colour wash.
-- **Evaluation**: DVH, dose statistics per structure (min, mean, max, D98, D95, D50, D2, V95%), beam MU and
-  SSD table, CSV export.
+- **IMRT constraints**: cost functions per structure (target penalty, target EUD, quadratic under/overdose,
+  under/overdose DVH, maximum dose, serial, parallel, conformality), as objective or constraint, with weights,
+  layering and a default set to start from; achieved values are shown after optimisation.
+- **Optimisation**: Stage 1 fluence optimisation for static IMRT beams and VMAT arcs, Stage 2 MLC segmentation
+  (intensity levels for step-and-shoot, apertures per arc sector for VMAT) with segment-weight optimisation,
+  MU and delivery-time estimate, cost history. Beams that are not optimised count as a bias dose.
+- **Plans**: several plans per patient (new, copy, rename, delete), plan sum, comparison (dashed DVH and
+  statistics side by side), dose-difference display.
+- **Evaluation**: DVH, dose statistics per structure (min, mean, max, D98, D95, D50, D2, V95%), clinical goals with
+  pass/fail, point doses, beam MU and SSD, CSV export, PDF plan report.
+- **DICOM RT**: export and import of RT Plan (jaws, MLC control points, MU, wedges) and RT Dose; an imported
+  dose can be compared with the PyTPS dose.
+- **Beam data editor** (Tools menu): PDD, output factors, head scatter, wedge factors, calibration; refit the
+  model and see data and model together.
 - **Beam data**: generic 6 MV and 10 MV data (PDD for several field sizes, output factors, head scatter,
   wedge factors); the model parameters are fitted to the data, as in commissioning.
 
-Planned next: IMRT constraints and inverse optimisation (IMRT, VMAT), plan comparison and plan sum,
-RT Plan / RT Dose import and export, beam data editor, DICOM export of the plan.
+Planned next: see `ROADMAP.md`.
 
 ## Run from source
 
@@ -42,7 +53,15 @@ RT Plan / RT Dose import and export, beam data editor, DICOM export of the plan.
 python -m pip install -r requirements.txt
 python run_pytps.py                       # or: python -m pytps
 python run_pytps.py --phantom "Thorax (lung tumour)" --demo-plan 0,90,180,270
+python run_pytps.py --phantom "Pelvis (prostate)" --demo-plan 0,52,104,156,204,256,308 --optimise 80
+python run_pytps.py --phantom "Head and neck" --demo-plan 0 --arc --optimise 60
 ```
+
+### First inverse plan (example)
+1. Patient: load a phantom or import CT + structures. 2. Planning ▸ Beams: add beams or an arc, set
+**MLC = optimised**, isocentre at the target centre. 3. Prescription: dose, fractions, target, normalisation.
+4. IMRT Constraints: start from *Defaults* and adjust. 5. Optimisation: *Optimise (1 + 2)*.
+6. Evaluation: DVH, goals, compare with a copy of the plan, PDF report.
 
 Python 3.10 or newer. Tested on Windows and Linux. A 4 mm dose grid needs about 1–2 GB of memory for a pelvis or thorax CT.
 
@@ -64,6 +83,7 @@ and start `PyTPS.exe`.
 | Polygon | click points, double-click or right-click to close; Shift = subtract |
 | Undo / redo | Ctrl + Z / Ctrl + Y |
 | Calculate dose | F5 |
+| Optimise (Stage 1 + 2) | F6 |
 
 ## Coordinate conventions
 
