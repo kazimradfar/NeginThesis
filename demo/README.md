@@ -25,6 +25,12 @@ python demo/make_demo_docx.py
 python harness/check_thesis.py --docx "Full Draft/VMAT-TBI_MSc_Thesis_DEMO_complete.docx"
 ```
 
-When real measurements are available, replace the demo values in Chapter 4
-and remove the note at the start of Chapter 4 and the demo clause in the
-Abstract.
+When real measurements are available:
+
+1. Enter the measured values in `demo_values.json`. Do not rerun `build_demo.py`, because it overwrites this file.
+2. Replace the figures in `figures/`, keeping the same file names.
+3. Run `python demo/make_demo_docx.py --final`. This writes `Full Draft/VMAT-TBI_MSc_Thesis_complete.docx`, without the demo note and without "demo" in the captions.
+4. Run `FINAL=1 node deck_spec.js` in `Presentation/src` to rebuild the slides.
+5. Review the interpretive sentences in Chapters 4 and 5, which were written for the demo pattern.
+
+Only Chapter 4 mentions the demo; the Abstract, Discussion and Conclusions take their numbers from the same JSON file.

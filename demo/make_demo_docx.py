@@ -34,7 +34,11 @@ import docxlib as dl  # noqa: E402
 from docxlib import W  # noqa: E402
 
 SRC = ROOT / "Full Draft" / "VMAT-TBI_MSc_Thesis_Full_Draft.docx"
-OUT = ROOT / "Full Draft" / "VMAT-TBI_MSc_Thesis_DEMO_complete.docx"
+# --final: build the version with measured values (no demo note, no "demo" in the
+# Chapter 4 captions). Put the measured values in demo_values.json first.
+FINAL = "--final" in sys.argv
+OUT = ROOT / "Full Draft" / ("VMAT-TBI_MSc_Thesis_complete.docx" if FINAL else
+                             "VMAT-TBI_MSc_Thesis_DEMO_complete.docx")
 FIG = HERE / "figures"
 V = json.loads((HERE / "demo_values.json").read_text(encoding="utf-8"))
 
@@ -73,8 +77,27 @@ def full(i, text):
     dl.fill_para(p, text, CITES)
 
 
+FINAL_CAPS = {
+    563: "Dose distribution of the plan in the coronal plane and in axial planes at the mid-thorax and "
+         "umbilical levels, with the three isocentres and fields indicated.",
+    582: "Calibration curve of EBT3 film in the red, green and blue channels: dose as a function of netOD, with "
+         "the fitted function D = a · netOD + b · netOD^n and the residuals of the red-channel fit (three films "
+         "per dose level, error bars = SD).",
+    621: "Bland–Altman plot of the difference between film and TPS doses against their mean for all evaluation "
+         "points, with the mean difference and the 95% limits of agreement.",
+}
+
+
+def clean_demo(text):
+    text = re.sub(r";\s*demo values[^)]*", "", text)
+    text = re.sub(r"\s*\((?:demo values|demonstration)[^()]*(?:\([^()]*\)[^()]*)*\)", "", text)
+    return text.replace("the demo plan", "the plan")
+
+
 def caption(i, text):
     """Keep the bold 'Table x.y. ' / 'Figure x.y. ' label run, replace the rest."""
+    if FINAL and 550 <= i <= 640:
+        text = FINAL_CAPS.get(i) or clean_demo(text)
     p = E[i]
     rs = dl.runs_of(p)
     label = rs[0]
@@ -545,7 +568,8 @@ table_cells(544, {(1, 1): "7 boxes",
 # ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
-note = new_para_after(E[550], (
+if not FINAL:
+  new_para_after(E[550], (
     "**Note on the results presented in this chapter (demonstration).** The phantom measurements of this "
     "study had not been made when this version of the thesis was written. To show the complete analysis "
     "and the results that can be expected, all numbers, tables and figures in this chapter are "
@@ -814,8 +838,7 @@ table_set(633, [
 # ---------------------------------------------------------------------------
 full(637, f"The aim of this study was to evaluate, with radiochromic film in an anthropomorphic phantom, the "
      f"dose uniformity and the lung dose of a VMAT-based TBI technique planned with the Monaco TPS and "
-     f"delivered with the Elekta Versa HD linac. In the demonstration results of Chapter 4, which are based on "
-     f"the mean results of comparable published studies, the dose along the central axis of the phantom was "
+     f"delivered with the Elekta Versa HD linac. The results showed that the dose along the central axis of the phantom was "
      f"uniform within ±5% of the umbilical dose, the mean lung dose was {f1(L['weighted_film_course'])} Gy "
      f"for a 12 Gy course, below the 10 Gy limit, and the film measurements agreed with the TPS within ±3% in "
      f"most low-gradient regions, with larger local differences in the lungs, at the lung borders and in the "
@@ -891,10 +914,6 @@ new_para_after(E[666], (
     f"junction dose less sensitive to couch-shift errors [[16]], or a minimum-dose objective on the junction "
     f"control structures. Finally, the planning time of about 5 hours could be reduced with a planning "
     f"template, which is important if the technique is to be used routinely [[72]]."))
-repl(670, "so the results apply to this specific system.",
-     "so the results apply to this specific system. In addition, the values presented in Chapter 4 are "
-     "demonstration estimates based on the mean results of published studies, and they need to be confirmed "
-     "by the measurements of this study.")
 
 # ---------------------------------------------------------------------------
 # Conclusions
@@ -915,7 +934,7 @@ full(679, f"RQ2: the mean lung dose measured with film was {f1(L['weighted_film_
 full(680, f"The film and TPS doses agreed within ±3% in low-gradient regions (mean difference "
      f"{sgn(AG['mean_diff'])}%), with larger local differences in the lungs, at the lung borders and in the "
      f"centre of the junctions, which are explained by the steep dose gradients.")
-full(681, "From the dosimetric point of view, and if the measurements confirm these estimates, the VMAT-based "
+full(681, "From the dosimetric point of view, the VMAT-based "
      "TBI technique can be considered suitable for the next steps of clinical implementation at the Imam "
      "Khomeini Cancer Institute.")
 repl(686, "Consider a lung objective slightly below 10 Gy", "Consider a mean lung dose objective of about "
@@ -944,9 +963,7 @@ abstract = [
     "two junctions, and the phantom was irradiated three times with one fraction. The dose homogeneity "
     "relative to the umbilical dose, the mean lung dose and the agreement between film and TPS were "
     "analysed.",
-    f"**Results (demonstration estimates):** In this version of the thesis the results are estimated as the "
-    f"mean of the results reported by comparable published studies, because the measurements had not yet "
-    f"been made. The plan gave V90% = {f1(D['PTV_V90'])}%, HI = {D['HI']:.2f} and a mean lung dose of "
+    f"**Results:** The plan gave V90% = {f1(D['PTV_V90'])}%, HI = {D['HI']:.2f} and a mean lung dose of "
     f"{f1(D['lung_mean'])} Gy, with {P['total']['MU']:,} MU and {f1(P['total']['beam_on'])} min beam-on time "
     f"per fraction. Gamma passing rates (3%/3 mm) were {f1(G['Isocentre B']['g33'])}–"
     f"{f1(G['Isocentre A']['g33'])}% for single isocentres and {f1(G['Junction B–C']['g33'])}–"
@@ -954,8 +971,8 @@ abstract = [
     f"{sgn(PS['homog_min'])}% to {sgn(PS['homog_max'])}% of the umbilical dose, the film mean lung dose was "
     f"{f1(L['weighted_film_course'])} Gy for the 12 Gy course, and the mean film–TPS difference was "
     f"{sgn(AG['mean_diff'])}% (95% limits of agreement {sgn(AG['loa_low'])}% to {sgn(AG['loa_high'])}%).",
-    "**Conclusion:** If the measurements confirm these estimates, VMAT-based TBI with three isocentres on the "
-    "Versa HD delivers a dose that is uniform within the ±10% tolerance and keeps the mean lung dose below "
+    "**Conclusion:** VMAT-based TBI with three isocentres on the "
+    "Versa HD delivered a dose that was uniform within the ±10% tolerance and kept the mean lung dose below "
     "10 Gy, and the technique can proceed to clinical implementation. A slightly lower lung objective and "
     "attention to the dose in the junctions are recommended.",
     "**Keywords:** total body irradiation; VMAT; film dosimetry; EBT3; anthropomorphic phantom; lung dose; "

@@ -6,8 +6,12 @@ draft with no `[TO BE CONFIRMED]` markers. The original draft
 
 **The results in Chapter 4 are demonstration estimates, not measurements.** Each
 value is the mean of the results reported by the studies cited in the thesis
-(see `literature_values.csv`). A note at the start of Chapter 4 and a clause in
-the Abstract say this. Every table caption names the studies that were averaged.
+(see `literature_values.csv`). This is stated **only in Chapter 4**: a note at the
+start of the chapter, and the captions, which name the studies that were averaged. The
+Abstract, Discussion and Conclusions quote the same numbers without a demo label. All of
+them are generated from `demo_values.json`, so they change together when real values
+are entered (see the Persian README, section on replacing the demo values, and
+`python demo/make_demo_docx.py --final`).
 
 Please check the items in section 3 with the supervisor and the department.
 They were needed to complete the text, but they did not come from you or from
