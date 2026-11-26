@@ -33,10 +33,10 @@ class DoseOverlay:
         from PySide6.QtGui import QFont, QLinearGradient
         st = self.state
         rx = st.plan.rx.dose
-        small = view.height() < 300
+        small = view.height() < 300 or view.width() < 420     # compact legend: per cent only
         row = 11 if small else 15
         f = QFont(view.font()); f.setPointSizeF(7.0 if small else 8.5); p.setFont(f)
-        W = 92 if small else 112
+        W = 58 if small else 112
         x0 = view.width() - W - 20
         y0 = 22
         if self.mode == "difference":
@@ -54,23 +54,25 @@ class DoseOverlay:
             for frac, lab in ((0.0, "+10 %"), (0.5, "0"), (1.0, "−10 %")):
                 yy = bar.top() + frac * bar.height()
                 gy = {0.0: 0.1 * rx, 0.5: 0.0, 1.0: -0.1 * rx}[frac]
-                p.drawText(QPointF(x0 + 18, yy + 4), f"{lab}  {gy:+.2f} Gy" if frac != 0.5 else "0")
+                p.drawText(QPointF(x0 + 18, yy + 4), f"{lab}  {gy:+.2f} Gy" if (frac != 0.5 and not small) else lab)
             return
         levels = [(lv, col) for lv, col in ISODOSE if self.mode == "wash" or self.levels.get(lv, True)]
         H = row * (len(levels) + 1) + 6
         p.fillRect(QRectF(x0 - 6, y0 - 4, W + 6, H + 4), QColor(0, 0, 0, 150))
         p.setPen(QColor(232, 238, 245))
-        p.drawText(QPointF(x0, y0 + row - 3), f"Rx {rx:.2f} Gy" if rx < 10 else f"Rx {rx:.1f} Gy")
+        p.drawText(QPointF(x0, y0 + row - 3), f"Rx {rx:.3g} Gy" if small else (f"Rx {rx:.2f} Gy" if rx < 10 else f"Rx {rx:.1f} Gy"))
         for i, (lv, col) in enumerate(levels):
             yy = y0 + row * (i + 1) + 3
+            sw = 10 if small else 14
             if self.mode == "wash":
-                p.fillRect(QRectF(x0, yy, 14, row - 2), QColor(*col))
+                p.fillRect(QRectF(x0, yy, sw, row - 2), QColor(*col))
             else:
-                p.setPen(QPen(QColor(*col), 2)); p.drawLine(QPointF(x0, yy + row / 2 - 1), QPointF(x0 + 14, yy + row / 2 - 1))
+                p.setPen(QPen(QColor(*col), 2)); p.drawLine(QPointF(x0, yy + row / 2 - 1), QPointF(x0 + sw, yy + row / 2 - 1))
             p.setPen(QColor(232, 238, 245))
             gy = rx * lv / 100
-            p.drawText(QPointF(x0 + 20, yy + row - 4), f"{lv:>3d} %")
-            p.drawText(QPointF(x0 + (52 if small else 62), yy + row - 4), f"{gy:.1f} Gy" if gy >= 10 else f"{gy:.2f} Gy")
+            p.drawText(QPointF(x0 + (16 if small else 20), yy + row - 4), f"{lv:>3d} %")
+            if not small:
+                p.drawText(QPointF(x0 + 62, yy + row - 4), f"{gy:.1f} Gy" if gy >= 10 else f"{gy:.2f} Gy")
 
     def _plane(self, view):
         st = self.state
