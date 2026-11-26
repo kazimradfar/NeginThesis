@@ -18,7 +18,10 @@ def main(argv=None):
     ap.add_argument("--optimise", type=int, default=0, help="with --demo-plan: optimise the beams (Stage 1 iterations)")
     ap.add_argument("--arc", action="store_true", help="with --demo-plan: use one arc instead of static fields")
     ap.add_argument("--screenshot", help="save a screenshot after start and quit (for tests)")
+    ap.add_argument("--self-test", dest="self_test", help="run a short check of the installed program and write the result (JSON)")
     a = ap.parse_args(argv)
+    if a.self_test:
+        return self_test(a.self_test)
 
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
@@ -29,6 +32,7 @@ def main(argv=None):
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("PyTPS")
     apply_theme(app)
+    _set_icon(app)
     w = MainWindow()
     W, H = (int(v) for v in a.size.lower().split("x"))
     w.resize(W, H)
@@ -66,6 +70,50 @@ def main(argv=None):
             app.quit()
         QTimer.singleShot(1500, shot)
     return app.exec()
+
+
+def _set_icon(app):
+    import os
+    from PySide6.QtGui import QIcon
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "pytps.png")
+    if os.path.exists(p):
+        app.setWindowIcon(QIcon(p))
+
+
+def self_test(out_path):
+    """Load a phantom, add two beams, calculate, optimise briefly, write a JSON report. Exit code 0 = passed."""
+    import json
+    import os
+    import time
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from .gui.main_window import MainWindow
+    from .gui.planning import demo_beams
+    from . import __version__
+    t0 = time.time()
+    res = {"version": __version__, "ok": False}
+    try:
+        app = QApplication.instance() or QApplication([])
+        w = MainWindow(); w.resize(1366, 768); w.show()
+        w.patient.load_phantom("Pelvis (prostate)")
+        demo_beams(w.state, [0, 120, 240])
+        for b in w.state.plan.beams:
+            b.mlc_mode = "optimised"
+        w.rx_panel.refresh(); w.rx_panel.method.setCurrentText("mean"); w.rx_panel.store()
+        w.opt_panel.it1.setValue(15); w.opt_panel.it2.setValue(5)
+        w.opt_panel.both()
+        p = w.state.plan
+        from .core.plan import dvh
+        d = dvh(p, w.state.engine, "PTV")
+        res.update(mu=[round(b.mu, 1) for b in p.beams], ptv_mean=round(d["mean"], 2), seconds=round(time.time() - t0, 1))
+        res["ok"] = bool(abs(d["mean"] - p.rx.dose) < 0.05 * p.rx.dose and all(b.mu > 0 for b in p.beams))
+        w.close()
+    except Exception as e:  # pragma: no cover
+        import traceback
+        res["error"] = repr(e); res["trace"] = traceback.format_exc()
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump(res, fh, indent=1)
+    return 0 if res["ok"] else 1
 
 
 if __name__ == "__main__":
