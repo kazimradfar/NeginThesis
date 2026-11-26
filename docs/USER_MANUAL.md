@@ -366,7 +366,8 @@ inverse-square factor. The MU per fraction are shown in the beam table and in th
 - **Off**.
 
 In every slice view a **colour bar** (wash) or **isodose legend** (lines) is shown at the top right, with each level in
-per cent and in Gy of the prescription. In the difference mode the bar shows the scale from −10 % to +10 %.
+per cent and in Gy of the prescription (small views show the per cent values only). In the difference mode the bar
+shows the scale from −10 % to +10 %.
 Hide or show it with **View ▸ Dose colour bar / isodose legend**.
 
 ![Colour wash with its colour bar](images/wash_legend.png)
