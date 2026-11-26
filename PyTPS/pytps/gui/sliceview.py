@@ -42,7 +42,7 @@ class SliceView(QWidget):
             self._contour_cache.clear(); self._ct_key = None
         if what == "structures":
             self._contour_cache.clear()
-        if what in ("image", "structures", "cursor", "window", "tool", "plan", "dose", "beam", "active"):
+        if what in ("image", "structures", "cursor", "window", "tool", "plan", "dose", "beam", "active", "points", "compare", "plans"):
             self.update()
 
     def _ax(self):

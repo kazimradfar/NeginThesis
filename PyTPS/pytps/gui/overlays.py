@@ -23,12 +23,15 @@ class DoseOverlay:
         st = self.state
         plan, eng = st.plan, st.engine
         g = eng.grid
-        key = (plan.version, view.view, round(float(st.cursor[view._ax()[2]]), 2))
+        cmp = st.compare if self.mode == "difference" else None
+        key = (id(plan), plan.version, id(cmp), cmp.version if cmp is not None else 0, self.mode == "difference", view.view, round(float(st.cursor[view._ax()[2]]), 2))
         if key in self._cache:
             return self._cache[key]
         if len(self._cache) > 30:
             self._cache.clear()
         vol = g.to_volume(plan.dose)
+        if cmp is not None and cmp.dose is not None and len(cmp.dose) == len(plan.dose):
+            vol = vol - g.to_volume(cmp.dose)
         n = view._ax()[2]
         f = (st.cursor[n] - g.origin[n]) / g.spacing
         k0 = int(np.clip(np.floor(f), 0, vol.shape[2 - n] - 1)); k1 = min(k0 + 1, vol.shape[2 - n] - 1); t = float(np.clip(f - k0, 0, 1))
@@ -41,13 +44,28 @@ class DoseOverlay:
 
     def __call__(self, p, view):
         st = self.state
-        if self.mode == "off" or st.plan is None or st.plan.dose is None or st.engine is None:
+        if self.mode == "off" or st.plan is None or st.plan.dose is None or st.engine is None or len(st.plan.dose) != len(st.engine.grid.pts):
             return
         sl, u0, v0, h = self._plane(view)
         rx = st.plan.rx.dose
         if rx <= 0 or not sl.any():
             return
         _, S, _ = view.mapping()
+        if self.mode == "difference":
+            from PySide6.QtCore import QRectF
+            from PySide6.QtGui import QImage
+            f = np.clip(sl / (0.1 * rx), -1, 1)
+            rgba = np.zeros(sl.shape + (4,), np.uint8)
+            pos, neg = f > 0.05, f < -0.05
+            rgba[pos] = np.stack([np.full(pos.sum(), 255), (200 * (1 - f[pos])).astype(np.uint8), (60 * (1 - f[pos])).astype(np.uint8), (60 + 150 * f[pos]).astype(np.uint8)], -1)
+            rgba[neg] = np.stack([(60 * (1 + f[neg])).astype(np.uint8), (140 * (1 + f[neg]) + 60).astype(np.uint8), np.full(neg.sum(), 255), (60 - 150 * f[neg]).astype(np.uint8)], -1)
+            img = QImage(rgba.data, sl.shape[1], sl.shape[0], sl.shape[1] * 4, QImage.Format_RGBA8888).copy()
+            a = S(u0 - h / 2, v0 - h / 2); b = S(u0 + (sl.shape[1] - 0.5) * h, v0 + (sl.shape[0] - 0.5) * h)
+            if view._ax()[3] < 0:
+                img = img.mirrored(False, True)
+            p.drawImage(QRectF(min(a.x(), b.x()), min(a.y(), b.y()), abs(b.x() - a.x()), abs(b.y() - a.y())), img)
+            p.setPen(QColor(255, 200, 200)); p.drawText(8, 46, f"Dose difference: {st.plan.name} − {st.compare.name if st.compare else '?'} (red hotter, blue colder, ±10 % Rx)")
+            return
         if self.mode == "wash":
             from PySide6.QtGui import QImage
             f = sl / rx
@@ -140,3 +158,21 @@ class BeamOverlay:
             if abs(b.iso[n] - c) < 3:
                 q = S(b.iso[ax[0]], b.iso[ax[1]])
                 p.setPen(QPen(QColor(255, 80, 80), 2)); p.drawLine(q + QPointF(-7, 0), q + QPointF(7, 0)); p.drawLine(q + QPointF(0, -7), q + QPointF(0, 7))
+
+
+class PointOverlay:
+    def __init__(self, state):
+        self.state = state
+
+    def __call__(self, p, view):
+        st = self.state
+        if not st.points:
+            return
+        _, S, _ = view.mapping()
+        ax = view._ax()
+        for name, xyz in st.points:
+            if abs(xyz[ax[2]] - st.cursor[ax[2]]) > 3:
+                continue
+            q = S(xyz[ax[0]], xyz[ax[1]])
+            p.setPen(QPen(QColor(255, 255, 255), 1.6)); p.setBrush(Qt.NoBrush); p.drawEllipse(q, 5, 5)
+            p.drawText(q + QPointF(7, -6), name)

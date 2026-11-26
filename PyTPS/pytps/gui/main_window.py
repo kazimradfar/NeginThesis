@@ -13,7 +13,7 @@ from ..core.phantoms import PHANTOMS
 from . import icons
 from .beamviews import BeamViews
 from .evaluation import DVHWidget, EvaluationPanel
-from .overlays import BeamOverlay, DoseOverlay
+from .overlays import BeamOverlay, DoseOverlay, PointOverlay
 from .panels import ContourPanel, PatientPanel
 from .optim_panels import ConstraintsPanel, OptimisationPanel
 from .planning import BeamsPanel, PrescriptionPanel
@@ -94,8 +94,9 @@ class MainWindow(QMainWindow):
         self.beamviews = BeamViews(st)
         self.views = [SliceView(st, "axial"), SliceView(st, "coronal"), SliceView(st, "sagittal"), self.beamviews]
         self.dose_ov, self.beam_ov = DoseOverlay(st), BeamOverlay(st)
+        self.point_ov = PointOverlay(st)
         for v in self.views[:3]:
-            v.overlays = [self.dose_ov, self.beam_ov]
+            v.overlays = [self.dose_ov, self.beam_ov, self.point_ov]
         self.grid = ViewGrid(self.views)
 
         # workspaces (left)
@@ -196,14 +197,26 @@ class MainWindow(QMainWindow):
         m.addAction(self._act("Optimise (Stage 1 + 2)", lambda: (self.show_planning(3), self.opt_panel.both()), shortcut="F6"))
         dm = m.addMenu("Dose display")
         dg = QActionGroup(self)
-        for k, n in (("lines", "Isodose lines"), ("wash", "Colour wash"), ("off", "Off")):
+        for k, n in (("lines", "Isodose lines"), ("wash", "Colour wash"), ("difference", "Difference to the compared plan"), ("off", "Off")):
             a = self._act(n, lambda _=False, k=k: self.set_dose_mode(k), checkable=True); dg.addAction(a); dm.addAction(a)
             if k == "lines":
                 a.setChecked(True)
         a = self._act("Show beams in the slices", lambda on: self.show_beams(on), checkable=True); a.setChecked(True); m.addAction(a)
+        # Plan management and DICOM RT
+        m = mb.addMenu("Pl&ans")
+        for t, f in (("New plan", self.new_plan), ("Copy plan", self.copy_plan), ("Rename plan…", self.rename_plan),
+                     ("Delete plan", self.delete_plan), (None, None), ("Plan sum…", self.sum_plans), (None, None),
+                     ("Export RT Plan…", self.export_rtplan), ("Export RT Dose…", self.export_rtdose),
+                     ("Import RT Plan…", self.import_rtplan), ("Import RT Dose (compare)…", self.import_rtdose), (None, None),
+                     ("PDF plan report…", lambda: self.evaluation.report(window=self))):
+            if t is None:
+                m.addSeparator()
+            else:
+                m.addAction(t, f)
         # Tools / Help
         m = mb.addMenu("&Tools")
         m.addAction(self._act("Measure distance", lambda: self.set_tool("ruler"), icons.ruler()))
+        m.addAction(self._act("Beam data and model…", self.beam_data))
         m = mb.addMenu("&Help")
         m.addAction(self._act("About PyTPS", self.about))
 
@@ -239,6 +252,9 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self._act("Undo", st.undo, icons.undo(), tip="Undo (Ctrl+Z)")); tb.addAction(self._act("Redo", st.redo, icons.undo(True), tip="Redo (Ctrl+Y)"))
         tb.addSeparator()
+        tb.addWidget(QLabel(" Plan "))
+        self.planbox = QComboBox(); self.planbox.setMinimumWidth(130); self.planbox.setToolTip("Current plan")
+        self.planbox.currentIndexChanged.connect(self._plan_selected); tb.addWidget(self.planbox)
         tb.addAction(self.a_beam); tb.addAction(self.a_calc)
         tb.addWidget(QLabel("  CP "))
         self.cpbox = QSpinBox(); self.cpbox.setRange(1, 1); self.cpbox.setToolTip("Control point of the selected arc (BEV, 3D and slices)")
@@ -254,6 +270,182 @@ class MainWindow(QMainWindow):
         if k in ("brush", "eraser", "polygon"):
             self.work.setCurrentWidget(self.contour)
 
+    # ------------------------------------------------------------------ plans
+    def _fill_plans(self):
+        st = self.state
+        self.planbox.blockSignals(True); self.planbox.clear()
+        for p in st.plans:
+            self.planbox.addItem(p.name)
+        if st.plan is not None:
+            self.planbox.setCurrentText(st.plan.name)
+        self.planbox.blockSignals(False)
+
+    def _plan_selected(self, i):
+        st = self.state
+        if 0 <= i < len(st.plans) and st.plans[i] is not st.plan:
+            self.set_plan(st.plans[i])
+
+    def set_plan(self, p):
+        st = self.state
+        st.plan = p
+        if st.compare is p:
+            st.compare = None
+        st.cur_beam = p.beams[0].name if p.beams else None; st.cp_index = 0
+        self._fill_plans()
+        for w in ("plans", "plan", "costs", "dose"):
+            st.changed.emit(w)
+
+    def _unique(self, base):
+        names = {p.name for p in self.state.plans}
+        n, name = 1, base
+        while name in names:
+            n += 1; name = f"{base} ({n})"
+        return name
+
+    def new_plan(self):
+        from ..core.plan import Plan
+        st = self.state
+        if st.image is None:
+            return
+        p = Plan(self._unique(f"Plan {len(st.plans) + 1}"))
+        if st.plan is not None:
+            p.rx.target = st.plan.rx.target
+        st.plans.append(p); self.set_plan(p)
+
+    def copy_plan(self):
+        import copy as _copy
+        st = self.state
+        if st.plan is None:
+            return
+        p = _copy.deepcopy(st.plan); p.name = self._unique(st.plan.name + " copy")
+        st.plans.append(p); self.set_plan(p)
+
+    def rename_plan(self):
+        from PySide6.QtWidgets import QInputDialog
+        st = self.state
+        if st.plan is None:
+            return
+        n, ok = QInputDialog.getText(self, "Rename plan", "Name:", text=st.plan.name)
+        if ok and n.strip() and n.strip() not in {p.name for p in st.plans}:
+            st.plan.name = n.strip(); self._fill_plans(); st.changed.emit("plans")
+
+    def delete_plan(self):
+        st = self.state
+        if st.plan is None or len(st.plans) < 2:
+            return
+        if QMessageBox.question(self, "Delete plan", f"Delete {st.plan.name}?") != QMessageBox.Yes:
+            return
+        st.plans.remove(st.plan); self.set_plan(st.plans[0])
+
+    def sum_plans(self):
+        from PySide6.QtWidgets import QInputDialog
+        from ..core.plan import plan_sum
+        st = self.state
+        ok_plans = [p for p in st.plans if p.dose is not None and st.engine is not None and len(p.dose) == len(st.engine.grid.pts)]
+        if len(ok_plans) < 2:
+            QMessageBox.information(self, "Plan sum", "Two plans with calculated dose (same dose grid) are needed."); return
+        names = [p.name for p in ok_plans]
+        a, ok = QInputDialog.getItem(self, "Plan sum", "First plan", names, 0, False)
+        if not ok:
+            return
+        b, ok = QInputDialog.getItem(self, "Plan sum", "Second plan", [n for n in names if n != a], 0, False)
+        if not ok:
+            return
+        s = plan_sum(next(p for p in ok_plans if p.name == a), next(p for p in ok_plans if p.name == b))
+        s.name = self._unique(s.name); st.plans.append(s); self.set_plan(s)
+
+    def _need_dose(self):
+        st = self.state
+        if st.plan is None or st.plan.dose is None or st.engine is None:
+            QMessageBox.information(self, "DICOM", "Calculate the dose first."); return False
+        return True
+
+    def export_rtplan(self):
+        from ..core import dicomio
+        st = self.state
+        if st.plan is None or not st.plan.beams:
+            QMessageBox.information(self, "RT Plan", "The plan has no beams."); return
+        path, _ = QFileDialog.getSaveFileName(self, "Export RT Plan", f"RP_{st.plan.name}.dcm", "DICOM (*.dcm)")
+        if path:
+            try:
+                dicomio.save_rtplan(path, st.plan, st.image)
+                self._message(f"RT Plan written: {os.path.basename(path)} (educational, not for treatment)")
+            except Exception as e:
+                QMessageBox.warning(self, "RT Plan", str(e))
+
+    def export_rtdose(self):
+        from ..core import dicomio
+        st = self.state
+        if not self._need_dose():
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Export RT Dose", f"RD_{st.plan.name}.dcm", "DICOM (*.dcm)")
+        if path:
+            try:
+                dicomio.save_rtdose(path, st.engine.grid.to_volume(st.plan.dose), st.engine.grid.spacing, st.engine.grid.origin, st.image)
+                self._message(f"RT Dose written: {os.path.basename(path)}")
+            except Exception as e:
+                QMessageBox.warning(self, "RT Dose", str(e))
+
+    def import_rtplan(self):
+        from ..core import dicomio
+        from ..core.plan import Plan
+        st = self.state
+        if st.image is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Import RT Plan", "", "DICOM (*.dcm);;All files (*)")
+        if not path:
+            return
+        try:
+            beams, rx = dicomio.load_rtplan(path, list(st.models))
+        except Exception as e:
+            QMessageBox.warning(self, "RT Plan", f"Could not read the plan: {e}"); return
+        p = Plan(self._unique("Imported plan")); p.beams = beams
+        if rx:
+            p.rx.dose, p.rx.fractions = rx
+        if st.plan is not None:
+            p.rx.target = st.plan.rx.target
+        for b in beams:
+            b.weight = b.mu if b.mu > 0 else 1.0
+        st.plans.append(p); self.set_plan(p)
+        self._message(f"Imported {len(beams)} beams. Calculate the dose to see it with the PyTPS beam model.")
+
+    def import_rtdose(self):
+        from ..core import dicomio
+        from ..core.dose_pb import DoseEngine
+        from ..core.plan import Plan
+        from scipy import ndimage
+        st = self.state
+        if st.image is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Import RT Dose", "", "DICOM (*.dcm);;All files (*)")
+        if not path:
+            return
+        try:
+            arr, sp, org = dicomio.load_rtdose(path)
+        except Exception as e:
+            QMessageBox.warning(self, "RT Dose", f"Could not read the dose: {e}"); return
+        if st.engine is None:
+            st.engine = DoseEngine(st.ss, st.models, 4.0); st.engine_version = (st.ss.version, st.density_version)
+        pts = st.engine.grid.pts
+        c = (pts - np.asarray(org)) / np.asarray(sp)
+        d = ndimage.map_coordinates(arr, [c[:, 2], c[:, 1], c[:, 0]], order=1, cval=0.0).astype(np.float32)
+        p = Plan(self._unique("Imported dose"), kind="imported"); p.dose = d; p.version = 1
+        if st.plan is not None:
+            p.rx = __import__("copy").deepcopy(st.plan.rx)
+        p.rx.dose = float(np.percentile(d[d > 0], 98)) if (d > 0).any() and st.plan is None else p.rx.dose
+        st.plans.append(p)
+        self._fill_plans(); st.changed.emit("plans")
+        self._message("RT Dose imported as a plan; choose it in Evaluation ▸ Compare with, or select it in the plan list.")
+
+    def beam_data(self):
+        from .beamdata_dialog import BeamDataDialog
+        dlg = BeamDataDialog(self.state, self)
+        if dlg.exec():
+            st = self.state
+            for p in st.plans:
+                p.beam_dose.clear()
+            self._message("Beam model updated: recalculate the dose of your plans.")
+
     def show_planning(self, i):
         self.work.setCurrentWidget(self.planning); self.planning.setCurrentIndex(i)
 
@@ -264,6 +456,8 @@ class MainWindow(QMainWindow):
         self.show_planning(1); self.rx_panel.calculate()
 
     def set_dose_mode(self, k):
+        if k == "difference" and self.state.compare is None:
+            self._message("Choose a plan in Evaluation ▸ Compare with to show the dose difference")
         self.dose_ov.mode = k
         for v in self.views[:3]:
             v.update()
@@ -321,6 +515,8 @@ class MainWindow(QMainWindow):
     def _changed(self, what):
         if what in ("plan", "beam", "image"):
             self._sync_cp()
+        if what in ("image", "plan", "plans", "dose"):
+            self._fill_plans()
         if what == "image" and self.state.image is not None:
             self.setWindowTitle(f"PyTPS {__version__} — {self.state.image.patient.get('id', '')} — educational, not for clinical use")
             self._message(f"Loaded {self.state.source}")

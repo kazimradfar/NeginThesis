@@ -26,7 +26,8 @@ def _dspin(lo, hi, dec=1, val=0.0, step=1.0, suffix=""):
 
 def ensure_plan(state):
     if state.plan is None:
-        state.plan = Plan()
+        state.plan = Plan(f"Plan {len(state.plans) + 1}")
+        state.plans.append(state.plan)
         cands = [s for s in state.ss.structures if s.is_target and s.mask.any()] if state.ss else []
         tgt = next((s.name for s in cands if s.type == "PTV"), cands[0].name if cands else None)
         if tgt:

@@ -55,3 +55,31 @@ def test_plan_beams_and_dose():
     w.beams_panel.add_arc(); app.processEvents()
     w.views[3].setCurrentIndex(1); app.processEvents(); w.views[3].setCurrentIndex(0); app.processEvents()
     w.close()
+
+
+def test_plans_compare_sum_report(tmp_path):
+    from PySide6.QtWidgets import QApplication
+    from pytps.gui.main_window import MainWindow
+    from pytps.gui.planning import demo_beams
+    from pytps.core.plan import plan_sum
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow(); w.resize(1366, 768); w.show()
+    w.patient.load_phantom("Thorax (lung tumour)")
+    demo_beams(w.state, [0, 180])
+    w.rx_panel.refresh(); w.rx_panel.calculate()
+    first = w.state.plan
+    w.copy_plan(); second = w.state.plan
+    assert second is not first and len(w.state.plans) == 2
+    second.beams[0].gantry = 60; second.beams[1].gantry = 240; second.beam_dose.clear()
+    w.rx_panel.calculate()
+    w.state.compare = first; w.state.changed.emit("compare")
+    w.set_dose_mode("difference"); app.processEvents()
+    s = plan_sum(first, second)
+    assert abs(float(s.dose.max()) - float((first.dose + second.dose).max())) < 1e-3
+    w.state.points.append(("P1", w.state.plan.beams[0].iso.copy())); w.evaluation.refresh()
+    w.evaluation.goal_list.append(("PTV", "D", 95.0, ">=", 57.0)); w.evaluation.refresh()
+    w.evaluation.report(str(tmp_path / "r.pdf"), w)
+    assert (tmp_path / "r.pdf").stat().st_size > 20000
+    from pytps.gui.beamdata_dialog import BeamDataDialog
+    d = BeamDataDialog(w.state, w); d.fit(); d.close()
+    w.close()
