@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TBI Planning Simulator — educational VMAT-TBI planning trainer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">
+    <div class="logo">TBI</div>
+    <div>
+      <div class="title">TBI Planning Simulator</div>
+      <div class="sub">Educational VMAT-TBI planning trainer · synthetic Rando-like phantom · approximate dose engine</div>
+    </div>
+  </div>
+  <div class="tools">
+    <select id="preset" title="Load a plan preset">
+      <option value="thesis">Preset: thesis plan (3 iso, 2 cm overlap)</option>
+      <option value="overlap4">Preset: wider overlap (4 cm)</option>
+      <option value="lung75">Preset: stricter lungs (Parallel 7.5 Gy)</option>
+      <option value="single">Preset: one arc per isocentre</option>
+      <option value="four">Preset: 4 isocentres</option>
+    </select>
+    <button id="btnOpt" class="primary" title="Optimise the fluence with the cost functions">⚙ Optimise</button>
+    <button id="btnFinal" title="Recalculate the DVH on a 0.5 cm grid">▦ Final dose</button>
+    <button id="btnPlay" title="Play the arcs (gantry, couch and MLC)">▶ Play arcs</button>
+    <button id="btnRef" title="Keep the current DVH, profile and statistics to compare with the next plan">☆ Set reference</button>
+    <select id="layout" title="Screen layout">
+      <option value="six">Layout: 6 views</option>
+      <option value="room">Layout: room + BEV</option>
+      <option value="slices">Layout: slices</option>
+    </select>
+    <button id="btnShot" title="Save a labelled screenshot (PNG)">📷 Screenshot</button>
+  </div>
+</header>
+
+<div id="main">
+  <aside id="side">
+    <nav class="tabs">
+      <button data-tab="plan" class="on">Plan</button>
+      <button data-tab="obj">Objectives</button>
+      <button data-tab="disp">Display</button>
+      <button data-tab="stats">Statistics</button>
+    </nav>
+
+    <section id="tab-plan" class="tab on">
+      <h3>Prescription</h3>
+      <div class="row"><label>Dose / fractions</label><input id="rx" type="number" step="0.5" value="12"> Gy in <input id="fx" type="number" value="6"> fx</div>
+      <div class="row"><label>Energy</label><span>6 MV · SAD 100 cm · max 250 MU/min</span></div>
+      <div class="row"><label>Control points</label><select id="cpStep"><option value="10">every 10°</option><option value="5">every 5°</option><option value="20">every 20°</option></select></div>
+      <div class="row"><label>Fluence smoothing</label><select id="smooth"><option>Off</option><option>Low</option><option selected>Medium</option><option>High</option></select></div>
+      <h3>Isocentres and fields <span class="hint">(z from vertex; Y1/Y2 jaws at the isocentre)</span></h3>
+      <table id="isoTable" class="grid"><thead><tr><th>Iso</th><th>z (cm)</th><th>Y1</th><th>Y2</th><th>Arcs</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="row btns"><button id="addIso">+ Isocentre</button><button id="applyPlan" class="primary">Apply beams</button></div>
+      <div id="overlapInfo" class="note"></div>
+      <h3>Beams</h3>
+      <div id="beamList" class="beamlist"></div>
+    </section>
+
+    <section id="tab-obj" class="tab">
+      <h3>Cost functions <span class="hint">(Monaco-style, simplified)</span></h3>
+      <table id="objTable" class="grid"><thead><tr><th>On</th><th>Structure</th><th>Type</th><th>Dose</th><th>Param</th><th>Wt</th></tr></thead><tbody></tbody></table>
+      <div class="note">Target Penalty: dose = prescription, param = minimum volume (%).<br>Quadratic Overdose: param = RMS (Gy).<br>Parallel: dose = reference dose, param = mean organ damage (%).<br>Maximum Dose: hard limit.</div>
+      <div class="row btns"><button id="btnOpt2" class="primary">⚙ Optimise</button></div>
+      <div id="optProgress" class="progress"><div></div></div>
+      <canvas id="objPlot" class="plot"></canvas>
+    </section>
+
+    <section id="tab-disp" class="tab">
+      <h3>Dose display</h3>
+      <div class="row"><label>Mode</label><select id="doseMode"><option value="iso">Isodose lines</option><option value="wash">Colour wash</option><option value="none">None</option></select></div>
+      <div id="isoChecks" class="checks"></div>
+      <h3>Structures</h3>
+      <div id="structChecks" class="checks"></div>
+      <h3>CT window</h3>
+      <div class="row"><select id="win"><option value="40,400">Soft tissue (40/400)</option><option value="-600,1500">Lung (−600/1500)</option><option value="300,1500">Bone (300/1500)</option></select></div>
+      <h3>Room view</h3>
+      <div class="checks">
+        <label><input type="checkbox" id="optTransp" checked> Transparent phantom (show lungs)</label>
+        <label><input type="checkbox" id="optTracks" checked> Arc tracks</label>
+        <label><input type="checkbox" id="optBeam" checked> Beam</label>
+        <label><input type="checkbox" id="optLasers" checked> Lasers</label>
+        <label><input type="checkbox" id="optMLC" checked> MLC leaves in BEV</label>
+        <label><input type="checkbox" id="optBeams2d" checked> Beam in axial view</label>
+      </div>
+      <div class="row btns"><button data-cam="iso">Room</button><button data-cam="side">Side</button><button data-cam="foot">Foot</button><button data-cam="bev">Top</button></div>
+    </section>
+
+    <section id="tab-stats" class="tab">
+      <h3>Plan evaluation <span id="gridInfo" class="hint"></span></h3>
+      <table id="statsTable" class="grid stats"></table>
+      <div class="note">Right column: literature means used in the thesis (Table 4.2). Values from this simulator come from a simplified dose model and are for training only.</div>
+    </section>
+  </aside>
+
+  <section id="views" class="six">
+    <div class="view" id="vRoom"><canvas id="cRoom"></canvas><div class="ovl" id="roomInfo"></div><div class="vt">Room view</div></div>
+    <div class="view" id="vBEV"><canvas id="cBEV"></canvas></div>
+    <div class="view" id="vDVH">
+      <div class="vtabs"><button data-p="dvh" class="on">DVH</button><button data-p="prof">Profile</button></div>
+      <canvas id="cDVH"></canvas><canvas id="cProf" style="display:none"></canvas>
+    </div>
+    <div class="view" id="vAx"><canvas id="cAx"></canvas></div>
+    <div class="view" id="vCor"><canvas id="cCor"></canvas></div>
+    <div class="view" id="vSag"><canvas id="cSag"></canvas></div>
+  </section>
+</div>
+
+<footer>
+  <div class="timeline">
+    <button id="prevCP" title="Previous control point">◀</button>
+    <input id="cpSlider" type="range" min="0" max="0" value="0">
+    <button id="nextCP" title="Next control point">▶</button>
+    <span id="cpInfo"></span>
+  </div>
+  <div class="disclaimer">Educational simulator — synthetic phantom, approximate dose. Not a clinical treatment planning system and not affiliated with any vendor.</div>
+</footer>
+
+<div id="busy"><div class="box"><div class="spin"></div><div id="busyText">Preparing beams…</div></div></div>
+
+<script src="js/phantom.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/room3d.js"></script>
+<script src="js/views2d.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
