@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RT Planning Simulator — educational treatment-planning trainer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">
+    <div class="logo">RT</div>
+    <div>
+      <div class="title">RT Planning Simulator <span class="edu">EDUCATIONAL</span></div>
+      <div class="sub">Planning trainer · synthetic phantoms · approximate dose engine · not for clinical use</div>
+    </div>
+  </div>
+  <div class="tools">
+    <select id="quickPreset" title="Load a teaching case (phantom + plan template)"></select>
+    <button id="btnPlay" title="Play the beams (gantry, couch, MLC) — Space"><span class="ic">▶</span><span class="tx"> Play</span></button>
+    <button id="btnSnap" title="Save the current plan as a snapshot for comparison"><span class="ic">★</span><span class="tx"> Snapshot</span></button>
+    <select id="layout" title="Screen layout">
+      <option value="six">Layout: 6 views</option>
+      <option value="room">Layout: room + BEV</option>
+      <option value="slices">Layout: slices</option>
+      <option value="eval">Layout: evaluation</option>
+    </select>
+    <button id="btnShot" title="Save a labelled screenshot (PNG)"><span class="ic">📷</span><span class="tx"> Screenshot</span></button>
+    <button id="btnSave" title="Save the plan as a JSON file"><span class="ic">💾</span><span class="tx"> Save</span></button>
+    <button id="btnOpen" title="Open a saved plan (JSON)"><span class="ic">📂</span><span class="tx"> Open</span></button>
+    <input id="fileOpen" type="file" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<div id="main">
+  <aside id="side">
+    <nav class="steps">
+      <button data-tab="patient" class="on"><b>1</b> Patient</button>
+      <button data-tab="struct"><b>2</b> Structures</button>
+      <button data-tab="beams"><b>3</b> Beams</button>
+      <button data-tab="rx"><b>4</b> Prescription</button>
+      <button data-tab="obj"><b>5</b> Constraints</button>
+      <button data-tab="param"><b>6</b> Parameters</button>
+      <button data-tab="opt"><b>7</b> Optimise</button>
+      <button data-tab="eval"><b>8</b> Evaluate</button>
+      <button data-tab="disp"><b>9</b> Display</button>
+    </nav>
+
+    <section id="tab-patient" class="tab on">
+      <h3>Phantom</h3>
+      <div class="row"><select id="phantom" class="wide"></select></div>
+      <div id="phantomInfo" class="note"></div>
+      <h3>Plan template</h3>
+      <div class="row"><select id="preset" class="wide"></select></div>
+      <div class="row btns"><button id="loadPreset" class="primary">Load template</button></div>
+      <div id="planInfo" class="note"></div>
+      <div class="note warn">Training tool only. Synthetic phantoms, simplified dose model, no patient data. Results must not be used for any clinical decision.</div>
+    </section>
+
+    <section id="tab-struct" class="tab">
+      <h3>Structure set <span class="hint">(order = layering priority)</span></h3>
+      <table id="structTable" class="grid"><thead><tr><th></th><th>Name</th><th>Role</th><th title="Density override (g/cm³), empty = from CT">ρ</th><th>cc</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="row"><label><input type="checkbox" id="layering"> Layering (overlaps belong to the higher structure in the optimiser)</label></div>
+      <div class="row btns"><button id="applyStruct" class="primary" title="Use the edited structures and density overrides in the plan">Apply to plan</button><span id="structDirty" class="hint"></span></div>
+      <h3>Contouring</h3>
+      <div class="row"><label>New structure</label><input id="newName" placeholder="name" style="width:90px"><select id="newRole"><option value="oar">OAR</option><option value="target">Target</option><option value="other">Other</option></select><button id="btnNew">Add</button></div>
+      <div class="row"><label>Edit</label><select id="editStruct"></select></div>
+      <div class="row"><label>Brush</label><select id="tool"><option value="">off (click = crosshair)</option><option value="paint">paint</option><option value="erase">erase</option></select> r <input id="brushR" type="number" step="0.5" value="1.5"> cm</div>
+      <div class="row"><label>Margin</label><select id="mSrc"></select> ± <input id="mCm" type="number" step="0.1" value="0.5"> cm → edit</div>
+      <div class="row"><label>Boolean</label><select id="bA"></select><select id="bOp"><option value="union">∪</option><option value="intersect">∩</option><option value="subtract">−</option><option value="xor">xor</option></select><select id="bB"></select> → edit</div>
+      <div class="row btns"><button id="btnMargin">Margin</button><button id="btnBool">Boolean</button><button id="btnInterp" title="Fill axial slices between contoured slices">Interpolate</button><button id="btnClear">Clear</button><button id="btnDelStruct">Delete</button></div>
+      <div id="contourMsg" class="note">Brush: choose a structure and a tool, then drag in any slice view (wheel = next slice). Margins are 3D; negative values contract.</div>
+    </section>
+
+    <section id="tab-beams" class="tab">
+      <h3>Beams <span id="techInfo" class="hint"></span></h3>
+      <div id="beamList" class="beamlist"></div>
+      <div class="row btns"><button id="addArc">+ Arc</button><button id="addStatic">+ Field</button><button id="addIso" title="TBI: add two arcs at the next isocentre down the body">+ Isocentre</button><button id="dupBeam">Duplicate</button><button id="delBeam">Delete</button></div>
+      <div id="beamEditor" class="editor"></div>
+      <div class="row btns"><button id="applyBeams" class="primary">Apply beams</button></div>
+      <div id="overlapInfo" class="note"></div>
+    </section>
+
+    <section id="tab-rx" class="tab">
+      <h3>Prescription</h3>
+      <div class="row"><label>Dose</label><input id="rx" type="number" step="0.5"> Gy in <input id="fx" type="number" step="1"> fractions</div>
+      <div class="row"><label>Dose / fraction</label><span id="dpf"></span></div>
+      <div class="row"><label>Target</label><select id="target"></select></div>
+      <div class="row"><label>Normalisation</label><select id="norm"><option value="mean">mean target dose = Rx</option><option value="D95">D95 = Rx</option><option value="D98">D98 = Rx</option><option value="D50">median (D50) = Rx</option><option value="none">none</option></select></div>
+      <div class="row"><label>Max dose rate</label><input id="doseRate" type="number" step="50"> MU/min</div>
+      <div class="row btns"><button id="applyRx" class="primary">Apply prescription</button></div>
+      <div class="note">Changing the prescription rescales the current plan; the cost-function doses are not changed automatically.</div>
+    </section>
+
+    <section id="tab-obj" class="tab">
+      <h3>Cost functions <span class="hint">(simplified, Monaco-style names)</span></h3>
+      <table id="objTable" class="grid"><thead><tr><th></th><th>Structure</th><th>Type</th><th>Dose</th><th>Par.</th><th>Wt</th><th>Mode</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="row btns"><button id="addObj">+ Cost function</button></div>
+      <div id="objHelp" class="note"></div>
+      <div class="note">
+        <b>Objective</b>: traded off against the others. <b>Constraint</b>: its weight grows while it is violated.<br>
+        Target Penalty / EUD / Underdose: keep the target up. Overdose, Maximum Dose, Serial (EUD with power k, for cord-like organs),
+        Parallel (mean organ damage, for lung-like organs), Over/Underdose DVH (dose–volume points), Conformality (dose fall-off around the target).
+      </div>
+    </section>
+
+    <section id="tab-param" class="tab">
+      <h3>Sequencing and optimisation parameters</h3>
+      <div class="row"><label>Arc CP spacing</label><select id="pCp"><option value="5">5°</option><option value="10">10°</option><option value="20">20°</option></select></div>
+      <div class="row"><label>Fluence smoothing</label><select id="pSmooth"><option>Off</option><option>Low</option><option>Medium</option><option>High</option></select></div>
+      <div class="row"><label>Stage 1 iterations</label><input id="pIt1" type="number" step="20"></div>
+      <div class="row"><label>Stage 2 iterations</label><input id="pIt2" type="number" step="10"></div>
+      <div class="row"><label>VMAT apertures / CP</label><input id="pVseg" type="number" step="1"> levels <input id="pVlev" type="number" step="1"></div>
+      <div class="row"><label>IMRT levels</label><input id="pLev" type="number" step="1"> max segs/beam <input id="pMaxSeg" type="number" step="1"></div>
+      <div class="row"><label>Min segment area</label><input id="pMinA" type="number" step="0.5"> cm² · min MU <input id="pMinMU" type="number" step="0.5"></div>
+      <div class="row"><label>Leaf speed</label><input id="pLeaf" type="number" step="0.5"> cm/s · gantry <input id="pGan" type="number" step="0.5"> °/s</div>
+      <div class="row"><label>Dose grid</label><input id="pGrid" type="number" step="0.1"> cm</div>
+      <div class="row btns"><button id="applyParam" class="primary">Apply parameters</button></div>
+      <div class="note">Grid or CP spacing changes rebuild the beams (the optimised fluence is reset).</div>
+    </section>
+
+    <section id="tab-opt" class="tab">
+      <h3>Optimise</h3>
+      <div class="row"><label>Beams</label><select id="optPart"><option value="0">all beams</option><option value="1">part 1 only (part 2 = bias dose)</option><option value="2">part 2 only (part 1 = bias dose)</option></select></div>
+      <div class="row btns"><button id="btnS1" class="primary" title="Stage 1: optimise the ideal fluence">Stage 1 · fluence</button><button id="btnS2" class="primary" title="Stage 2: MLC segments and segment weights">Stage 2 · segments</button></div>
+      <div class="row btns"><button id="btnCalc" title="Forward calculation of the beams as set (3D-CRT, conventional TBI)">Calculate</button><button id="btnW" title="3D-CRT: optimise only the beam weights">Optimise weights</button><button id="btnFinal" title="Final dose on a finer grid">Final dose</button></div>
+      <div id="optProgress" class="progress"><div></div></div>
+      <div id="optStatus" class="note"></div>
+      <canvas id="objPlot" class="plot"></canvas>
+      <table id="objStatus" class="grid stats"></table>
+    </section>
+
+    <section id="tab-eval" class="tab">
+      <h3>Clinical goals <span id="gridInfo" class="hint"></span></h3>
+      <table id="goalTable" class="grid stats"></table>
+      <h3>Target</h3>
+      <table id="statsTable" class="grid stats"></table>
+      <h3>Snapshots and comparison</h3>
+      <div id="snapList" class="beamlist"></div>
+      <div class="row"><label>Show dose</label><select id="doseSrc" class="wide"></select></div>
+      <h3>Point doses</h3>
+      <div class="row btns"><button id="addPoint" title="Add a point at the crosshair (or Shift+click in a slice)">+ Point at crosshair</button><button id="clrPoints">Clear</button></div>
+      <table id="pointTable" class="grid stats"></table>
+      <h3>Robustness (set-up / isocentre shift)</h3>
+      <div class="row"><label>Shift (cm)</label>x <input id="shX" type="number" step="0.1" value="0"> y <input id="shY" type="number" step="0.1" value="0"> z <input id="shZ" type="number" step="0.1" value="0.5"></div>
+      <div class="row"><label>Apply to</label><select id="shWhich" class="wide"></select></div>
+      <div class="row btns"><button id="btnShift">Recalculate shifted</button><button id="btnShiftPM" title="+shift and −shift, saved as two snapshots">± test</button></div>
+      <h3>Beams and MU</h3>
+      <table id="muTable" class="grid stats"></table>
+      <div class="note" id="evalNote"></div>
+    </section>
+
+    <section id="tab-disp" class="tab">
+      <h3>Dose display</h3>
+      <div class="row"><label>Mode</label><select id="doseMode"><option value="iso">Isodose lines</option><option value="wash">Colour wash</option><option value="none">None</option></select></div>
+      <div id="isoChecks" class="checks two"></div>
+      <h3>CT window</h3>
+      <div class="row"><select id="win"><option value="40,400">Soft tissue (40/400)</option><option value="-600,1500">Lung (−600/1500)</option><option value="300,1500">Bone (300/1500)</option></select></div>
+      <h3>Profile</h3>
+      <div class="row"><label>Direction</label><select id="profAxis"><option value="z">head–foot (z)</option><option value="x">right–left (x)</option><option value="y">anterior–posterior (y)</option></select></div>
+      <h3>Views</h3>
+      <div class="checks">
+        <label><input type="checkbox" id="optTransp" checked> Transparent phantom (lungs, targets)</label>
+        <label><input type="checkbox" id="optTracks" checked> Arc tracks and field directions</label>
+        <label><input type="checkbox" id="optBeam" checked> Beam in room view</label>
+        <label><input type="checkbox" id="optLasers" checked> Lasers</label>
+        <label><input type="checkbox" id="optMLC" checked> MLC leaves in BEV</label>
+        <label><input type="checkbox" id="optBeams2d" checked> Beams in slice views</label>
+      </div>
+      <div class="row btns"><button data-cam="iso">Room</button><button data-cam="side">Side</button><button data-cam="foot">Foot</button><button data-cam="bev">Top</button></div>
+    </section>
+  </aside>
+
+  <section id="views" class="six">
+    <div class="view" id="vRoom"><canvas id="cRoom"></canvas><div class="ovl" id="roomInfo"></div><div class="vt">Room view</div></div>
+    <div class="view" id="vBEV"><canvas id="cBEV"></canvas></div>
+    <div class="view" id="vDVH">
+      <div class="vtabs"><button data-p="dvh" class="on">DVH</button><button data-p="prof">Profile</button></div>
+      <canvas id="cDVH"></canvas><canvas id="cProf" style="display:none"></canvas>
+    </div>
+    <div class="view" id="vAx"><canvas id="cAx"></canvas></div>
+    <div class="view" id="vCor"><canvas id="cCor"></canvas></div>
+    <div class="view" id="vSag"><canvas id="cSag"></canvas></div>
+  </section>
+</div>
+
+<footer>
+  <div class="timeline">
+    <button id="prevCP" title="Previous control point (←)">◀</button>
+    <input id="cpSlider" type="range" min="0" max="0" value="0">
+    <button id="nextCP" title="Next control point (→)">▶</button>
+    <span class="seg">seg <input id="segSlider" type="range" min="0" max="0" value="0"></span>
+    <span id="cpInfo"></span>
+  </div>
+  <div class="disclaimer">Educational simulator — synthetic phantoms, approximate dose model. Not a clinical treatment planning system and not affiliated with any vendor.</div>
+</footer>
+
+<div id="busy"><div class="box"><div class="spin"></div><div id="busyText">Preparing…</div></div></div>
+
+<script src="js/phantoms.js"></script>
+<script src="js/case.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/plans.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/room3d.js"></script>
+<script src="js/views2d.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
