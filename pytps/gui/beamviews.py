@@ -336,7 +336,7 @@ class RoomView(QWidget):
     def __init__(self, state, parent=None):
         super().__init__(parent)
         self.state = state
-        self.yaw, self.pitch, self.zoom = 0.75, 0.35, 1.0
+        self.yaw, self.pitch, self.zoom = 0.75, 0.32, 1.9
         self._drag = None
         self._body = None
         self.setMinimumSize(160, 140)
