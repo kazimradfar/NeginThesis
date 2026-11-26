@@ -136,7 +136,7 @@ def dvh(plan: Plan, eng: DoseEngine, name: str, bins=400):
     step = max(1, len(k) // 200000)
     w = img.index_to_world(np.column_stack([i[::step], j[::step], k[::step]]))
     g = eng.grid
-    vol = g.to_volume(plan.dose)
+    vol = g.to_volume(plan.dose, extend=True)
     c = (w - g.origin) / g.spacing
     d = ndimage.map_coordinates(vol, [c[:, 2], c[:, 1], c[:, 0]], order=1, mode="nearest")
     d.sort()
@@ -154,7 +154,7 @@ def dose_at(plan: Plan, eng: DoseEngine, p):
         return float("nan")
     from scipy import ndimage
     g = eng.grid
-    vol = g.to_volume(plan.dose)
+    vol = g.to_volume(plan.dose, extend=True)
     c = (np.asarray(p, float) - g.origin) / g.spacing
     return float(ndimage.map_coordinates(vol, [[c[2]], [c[1]], [c[0]]], order=1, mode="nearest")[0])
 

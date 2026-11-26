@@ -12,7 +12,7 @@ from .. import DISCLAIMER, __version__
 from ..core.phantoms import PHANTOMS
 from . import icons
 from .beamviews import BeamViews
-from .evaluation import DVHWidget, EvaluationPanel
+from .evaluation import DVHWidget, EvaluationPanel, ProfileWidget
 from .overlays import BeamOverlay, DoseOverlay, PointOverlay
 from .panels import ContourPanel, PatientPanel
 from .optim_panels import ConstraintsPanel, OptimisationPanel
@@ -118,7 +118,8 @@ class MainWindow(QMainWindow):
         self.lower = QTabWidget()
         self.dvh = DVHWidget(st)
         self.log = QPlainTextEdit(); self.log.setReadOnly(True); self.log.setMaximumBlockCount(500)
-        self.lower.addTab(self.dvh, "DVH"); self.lower.addTab(self.log, "Messages")
+        self.profile = ProfileWidget(st)
+        self.lower.addTab(self.dvh, "DVH"); self.lower.addTab(self.profile, "Profile"); self.lower.addTab(self.log, "Messages")
 
         right = QSplitter(Qt.Vertical); right.addWidget(self.grid); right.addWidget(self.lower)
         right.setStretchFactor(0, 4); right.setStretchFactor(1, 1); right.setSizes([650, 200])
@@ -219,6 +220,8 @@ class MainWindow(QMainWindow):
         m.addAction(self._act("Measure distance", lambda: self.set_tool("ruler"), icons.ruler()))
         m.addAction(self._act("Beam data and model…", self.beam_data))
         m = mb.addMenu("&Help")
+        m.addAction(self._act("Guided exercise: VMAT-TBI (thesis)", self.show_guide, shortcut="F1"))
+        m.addSeparator()
         m.addAction(self._act("About PyTPS", self.about))
 
         # toolbar
@@ -264,6 +267,13 @@ class MainWindow(QMainWindow):
         tb.addAction(self._act("Screenshot", self.save_screenshot, icons.camera(), tip="Save the window as PNG"))
 
     # ------------------------------------------------------------------ actions
+    def show_guide(self):
+        if getattr(self, "guide", None) is None:
+            from .guide import GuideDock
+            self.guide = GuideDock(self)
+            self.addDockWidget(Qt.RightDockWidgetArea, self.guide)
+        self.guide.show(); self.guide.raise_()
+
     def set_tool(self, k):
         self.state.set_tool(k)
         if k in self.tool_acts:

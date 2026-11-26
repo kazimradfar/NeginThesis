@@ -45,8 +45,16 @@ class DoseGrid:
         pts = np.stack([X[inside], Y[inside], Z[inside]], -1)
         return cls(spacing, lo, Z.shape, inside, pts)
 
-    def to_volume(self, values):
-        v = np.zeros(self.shape, np.float32); v[self.inside] = values; return v
+    def to_volume(self, values, extend=False):
+        """Dose volume on the grid; extend=True fills the voxels outside the body with the nearest inside value,
+        so that interpolation near the skin is not pulled down by the zeros outside."""
+        v = np.zeros(self.shape, np.float32); v[self.inside] = values
+        if extend:
+            if getattr(self, "_nearest", None) is None:
+                self._nearest = ndimage.distance_transform_edt(~self.inside, return_distances=False, return_indices=True)
+            k, j, i = self._nearest
+            v = v[k, j, i]
+        return v
 
     def axis(self, i):
         return self.origin[i] + self.spacing * np.arange(self.shape[2 - i])

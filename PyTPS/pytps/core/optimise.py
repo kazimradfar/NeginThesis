@@ -67,7 +67,7 @@ class OptSettings:
 class VoxelSet:
     """Dose-grid voxels used by the optimiser: all voxels of the cost-function structures, the rest of the body sparsely."""
 
-    def __init__(self, eng: DoseEngine, costs: list[Cost], target: str, layering: bool):
+    def __init__(self, eng: DoseEngine, costs: list[Cost], target: str, layering: bool, max_voxels=60000):
         ss, img, g = eng.ss, eng.ss.image, eng.grid
         ijk = np.round(img.world_to_index(g.pts)).astype(int)
         ok = (ijk >= 0).all(1) & (ijk[:, 0] < img.shape[2]) & (ijk[:, 1] < img.shape[1]) & (ijk[:, 2] < img.shape[0])
@@ -88,11 +88,24 @@ class VoxelSet:
                 anyorg |= m
         gi = np.round((g.pts - g.origin) / g.spacing).astype(int)
         sparse = (gi[:, 0] % 2 == 0) & (gi[:, 1] % 2 == 0) & (gi[:, 2] % 2 == 0)
-        keep = anyorg | sparse
+        dense = anyorg.copy()
+        if anyorg.sum() > max_voxels:
+            # very large targets (e.g. total body): keep organs at risk complete, sample the large structures sparsely
+            big = np.zeros(len(g.pts), bool)
+            for n, m in member.items():
+                s = ss.get(n)
+                if s.is_target or m.sum() > max_voxels / 3:
+                    big |= m
+            small = anyorg & ~big
+            for n, m in member.items():
+                if not (ss.get(n).is_target or m.sum() > max_voxels / 3):
+                    small |= m
+            dense = small
+        keep = dense | sparse
         self.index = np.where(keep)[0]                   # into the dose-grid points
         self.pts = g.pts[self.index]
-        # weights: sparse body voxels represent 8 voxels
-        self.w = np.where(anyorg[self.index], 1.0, 8.0).astype(np.float32)
+        # weights: sparsely sampled voxels represent 8 voxels
+        self.w = np.where(dense[self.index], 1.0, 8.0).astype(np.float32)
         self.member = {n: m[self.index] for n, m in member.items()}
         if layering:
             # a voxel belongs only to the highest structure in the list (target structures first in ties)

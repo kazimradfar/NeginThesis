@@ -290,7 +290,7 @@ class SliceView(QWidget):
             new = np.round(new, 0)
             for q in st.plan.beams:                      # every beam that shares this isocentre moves with it
                 if np.allclose(q.iso, old):
-                    q.iso = new.copy(); q.cps = []; st.plan.beam_dose.pop(q.name, None)
+                    q.iso = new.copy(); st.plan.beam_dose.pop(q.name, None)      # MLC sequence kept: a set-up shift
             self._iso_moved = True
             st.message.emit(f"Isocentre x {new[0] / 10:.1f}  y {new[1] / 10:.1f}  z {new[2] / 10:.1f} cm")
             for v in (st.views if hasattr(st, "views") else []):

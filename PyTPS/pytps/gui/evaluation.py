@@ -354,3 +354,85 @@ def write_report(path, st, panel, window=None):
         pa.drawImage(QRectF(0, y[0], img.width() * sc, img.height() * sc), img)
     footer()
     pa.end()
+
+
+class ProfileWidget(QWidget):
+    """Dose along a line through the crosshair (head-foot by default: junctions of TBI fields)."""
+
+    def __init__(self, state, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self.axis = "z"
+        self.setMinimumHeight(120)
+        state.changed.connect(lambda w: self.update() if w in ("dose", "cursor", "plans", "compare", "image", "plan") else None)
+
+    def mouseDoubleClickEvent(self, ev):
+        self.axis = {"z": "x", "x": "y", "y": "z"}[self.axis]; self.update()
+
+    def _line(self, plan):
+        from scipy import ndimage
+        st = self.state
+        g = st.engine.grid
+        i = "xyz".index(self.axis)
+        ext = st.image.extent()[i]
+        t = np.linspace(ext[0], ext[1], 400)
+        pts = np.repeat(np.asarray(st.cursor, float)[None], len(t), 0); pts[:, i] = t
+        vol = g.to_volume(plan.dose)
+        c = (pts - g.origin) / g.spacing
+        d = ndimage.map_coordinates(vol, [c[:, 2], c[:, 1], c[:, 0]], order=1, cval=0.0)
+        inside = ndimage.map_coordinates(g.inside.astype(np.float32), [c[:, 2], c[:, 1], c[:, 0]], order=0, cval=0.0) > 0.5
+        return t, np.where(inside, d, np.nan)
+
+    def paintEvent(self, ev):
+        p = QPainter(self); p.fillRect(self.rect(), QColor(250, 251, 252)); p.setRenderHint(QPainter.Antialiasing)
+        st = self.state
+        pl = st.plan
+        if pl is None or pl.dose is None or st.engine is None or len(pl.dose) != len(st.engine.grid.pts):
+            p.setPen(QColor(120, 130, 145)); p.drawText(self.rect(), Qt.AlignCenter, "Dose profile: calculate the dose first")
+            p.end(); return
+        t, d = self._line(pl)
+        rx = pl.rx.dose
+        L, R, T, B = 48, self.width() - 12, 22, self.height() - 26
+        dmax = max(np.nanmax(d) if np.isfinite(d).any() else rx, rx) * 1.12
+        X = lambda v: L + (R - L) * (v - t[0]) / (t[-1] - t[0]); Y = lambda v: B - (B - T) * v / dmax
+        # field extents along z of each isocentre
+        if self.axis == "z" and pl.beams:
+            cols = [QColor(88, 166, 255, 40), QColor(255, 159, 67, 40), QColor(61, 220, 151, 40), QColor(201, 160, 255, 40)]
+            groups = {}
+            for b in pl.beams:
+                groups.setdefault(tuple(np.round(b.iso, 1)), []).append(b)
+            for k, (iso, bs) in enumerate(sorted(groups.items(), key=lambda kv: kv[0][2])):
+                lo = min(b.iso[2] + b.y1 for b in bs); hi = max(b.iso[2] + b.y2 for b in bs)
+                p.fillRect(QRectF(X(lo), T, X(hi) - X(lo), B - T), cols[k % len(cols)])
+        p.setPen(QColor(222, 227, 233))
+        for f in (0.9, 1.0, 1.1):
+            p.drawLine(QPointF(L, Y(f * rx)), QPointF(R, Y(f * rx)))
+        p.setPen(QColor(90, 100, 115)); f = QFont(); f.setPointSizeF(8.5); p.setFont(f)
+        for fr in (0.9, 1.0, 1.1):
+            p.drawText(QPointF(L - 40, Y(fr * rx) + 4), f"{fr * 100:.0f}%")
+        step = 100 if (t[-1] - t[0]) > 500 else 50
+        for v in np.arange(np.ceil(t[0] / step) * step, t[-1], step):
+            p.drawText(QPointF(X(v) - 10, B + 14), f"{v / 10:g}")
+
+        def line(dd, col, dash):
+            p.setPen(QPen(col, 1.6 if dash else 2.0, Qt.DashLine if dash else Qt.SolidLine))
+            path = []
+            for a, b in zip(t, dd):
+                if np.isfinite(b):
+                    path.append(QPointF(X(a), Y(b)))
+                elif len(path) > 1:
+                    p.drawPolyline(QPolygonF(path)); path = []
+                else:
+                    path = []
+            if len(path) > 1:
+                p.drawPolyline(QPolygonF(path))
+        cmp = _cmp(st)
+        if cmp is not None:
+            line(self._line(cmp)[1], QColor(130, 90, 210), True)
+        line(d, QColor(200, 120, 0), False)
+        c = st.cursor
+        p.setPen(QColor(40, 48, 60))
+        name = {"z": "head–foot (z)", "x": "right–left (x)", "y": "anterior–posterior (y)"}[self.axis]
+        p.drawText(8, 14, f"Dose profile {name} through x {c[0] / 10:.1f}, y {c[1] / 10:.1f}, z {c[2] / 10:.1f} cm · "
+                          f"coloured bands = fields of each isocentre · double-click to change direction" + (f" · dashed: {cmp.name}" if cmp is not None else ""))
+        p.end()
