@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       build_windows:
-        description: "Build the Windows program"
+        description: "Build the Windows program and publish the release"
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -65,8 +65,9 @@ jobs:
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-shots
 
   windows:
-    # builds on every push to the pytps branch (and on request) and publishes the release "pytps-latest"
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/pytps'
+    # builds only on request: Actions > PyTPS > Run workflow (branch pytps, "Build the Windows program" ticked);
+    # pushes run the tests and screenshots only
+    if: github.event_name == 'workflow_dispatch' && inputs.build_windows
     needs: test
     runs-on: windows-latest
     defaults:
