@@ -240,7 +240,75 @@ class SliceView(QWidget):
         elif tool == "polygon":
             _, _, inv = self.mapping(); self._poly.append(inv(pos.x(), pos.y())); self.update()
         else:
+            hit = self._field_hit(pos)
+            if hit is not None:
+                self._drag = ("field",) + hit; return
             self._drag = ("cursor",); self.state.set_cursor(self.world_point(pos.x(), pos.y()))
+
+    # ------------------------------------------------------------------ editing the field with the mouse
+    def _cur_beam(self):
+        st = self.state
+        if st.plan is None or not st.plan.beams or not getattr(self, "edit_fields", True):
+            return None, None
+        b = st.plan.beam(st.cur_beam) or st.plan.beams[0]
+        cps = b.control_points()
+        cp = cps[min(st.cp_index, len(cps) - 1)] if b.kind == "ARC" else cps[0]
+        return b, cp
+
+    def _field_hit(self, pos):
+        """Which handle of the current beam is under the mouse: the isocentre or a jaw edge (in this slice)."""
+        from ..core.beams import SAD, Frame
+        b, cp = self._cur_beam()
+        if b is None:
+            return None
+        s, S, _ = self.mapping()
+        a = self._ax()
+        q = S(b.iso[a[0]], b.iso[a[1]])
+        if abs(b.iso[a[2]] - self.state.cursor[a[2]]) < 5 and (q - pos).manhattanLength() < 10:
+            return ("iso", b.name)
+        fr = Frame(cp, b.iso, b.orientation)
+        u, v, d = fr.project(self.world_point(pos.x(), pos.y())[None])
+        if d[0] <= 1:
+            return None
+        tol = 7 / s * SAD / d[0]
+        cand = [("x1", abs(u[0] - b.x1), b.y1 - tol <= v[0] <= b.y2 + tol), ("x2", abs(u[0] - b.x2), b.y1 - tol <= v[0] <= b.y2 + tol),
+                ("y1", abs(v[0] - b.y1), b.x1 - tol <= u[0] <= b.x2 + tol), ("y2", abs(v[0] - b.y2), b.x1 - tol <= u[0] <= b.x2 + tol)]
+        cand = [c for c in cand if c[2] and c[1] < tol]
+        if not cand:
+            return None
+        return ("jaw", b.name, min(cand, key=lambda c: c[1])[0])
+
+    def _drag_field(self, d, pos):
+        from ..core.beams import Frame
+        st = self.state
+        b = st.plan.beam(d[2]) if st.plan else None
+        if b is None:
+            return
+        if d[1] == "iso":
+            old = b.iso.copy()
+            new = self.world_point(pos.x(), pos.y()); a = self._ax(); new[a[2]] = old[a[2]]
+            new = np.round(new, 0)
+            for q in st.plan.beams:                      # every beam that shares this isocentre moves with it
+                if np.allclose(q.iso, old):
+                    q.iso = new.copy(); q.cps = []; st.plan.beam_dose.pop(q.name, None)
+            self._iso_moved = True
+            st.message.emit(f"Isocentre x {new[0] / 10:.1f}  y {new[1] / 10:.1f}  z {new[2] / 10:.1f} cm")
+            for v in (st.views if hasattr(st, "views") else []):
+                v.update()
+            self.update(); return
+        cps = b.control_points()
+        cp = cps[min(st.cp_index, len(cps) - 1)] if b.kind == "ARC" else cps[0]
+        fr = Frame(cp, b.iso, b.orientation)
+        u, v, _ = fr.project(self.world_point(pos.x(), pos.y())[None])
+        jaw = d[3]
+        val = float(np.round(u[0] if jaw[0] == "x" else v[0]))
+        lo, hi = (-200.0, getattr(b, jaw[0] + "2") - 5) if jaw.endswith("1") else (getattr(b, jaw[0] + "1") + 5, 200.0)
+        setattr(b, jaw, float(np.clip(val, lo, hi)))
+        b.cps = []
+        st.plan.beam_dose.pop(b.name, None)
+        st.message.emit(f"{b.name}: X {b.x1 / 10:.1f} / {b.x2 / 10:.1f}  Y {b.y1 / 10:.1f} / {b.y2 / 10:.1f} cm  "
+                        f"(field {(b.x2 - b.x1) / 10:.1f} × {(b.y2 - b.y1) / 10:.1f} cm)")
+        st.changed.emit("beam")
 
     def mouseDoubleClickEvent(self, ev):
         if self.state.tool == "polygon" and len(self._poly) >= 3:
@@ -259,6 +327,20 @@ class SliceView(QWidget):
         if d is None:
             if st.tool in ("brush", "eraser", "polygon"):
                 self.update()
+            elif st.tool == "select" and st.image is not None:
+                hit = self._field_hit(pos)
+                shape = Qt.ArrowCursor
+                if hit is not None:
+                    if hit[0] == "iso":
+                        shape = Qt.SizeAllCursor
+                    else:
+                        b, cp = self._cur_beam()
+                        from ..core.beams import Frame
+                        fr = Frame(cp, b.iso, b.orientation)
+                        ax = fr.X if hit[2][0] == "x" else fr.Y      # direction the edge moves, seen in this view
+                        a = self._ax()
+                        shape = Qt.SizeHorCursor if abs(ax[a[0]]) >= abs(ax[a[1]]) else Qt.SizeVerCursor
+                self.setCursor(shape)
             return
         if d[0] == "pan":
             self.pan = d[2] + (pos - d[1]); self.update()
@@ -273,10 +355,14 @@ class SliceView(QWidget):
             self._paint(pos)
         elif d[0] == "cursor":
             st.set_cursor(self.world_point(pos.x(), pos.y()))
+        elif d[0] == "field":
+            self._drag_field(d, pos)
 
     def mouseReleaseEvent(self, ev):
         if self._drag and self._drag[0] == "brush":
             self.state.end_edit()
+        if self._drag and self._drag[0] == "field":
+            self.state.changed.emit("plan")
         self._drag = None
 
     def leaveEvent(self, ev):

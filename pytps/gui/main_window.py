@@ -98,6 +98,7 @@ class MainWindow(QMainWindow):
         for v in self.views[:3]:
             v.overlays = [self.dose_ov, self.beam_ov, self.point_ov]
         self.grid = ViewGrid(self.views)
+        st.views = self.views
 
         # workspaces (left)
         self.work = QTabWidget(); self.work.setTabPosition(QTabWidget.North); self.work.setMinimumWidth(330)

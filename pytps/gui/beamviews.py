@@ -38,7 +38,7 @@ class BEVView(QWidget):
 
     def _extent(self, cp):
         half = max(150.0, max(abs(cp.x1), abs(cp.x2), abs(cp.y1), abs(cp.y2)) + 60)
-        return half
+        return float(np.ceil(half / 50.0) * 50.0)
 
     def mapping(self, cp):
         half = self._extent(cp)
@@ -310,13 +310,182 @@ class Model3DView(QWidget):
         self.zoom = float(np.clip(self.zoom * (1.12 if ev.angleDelta().y() > 0 else 1 / 1.12), 0.3, 8)); self.update()
 
 
+def _box(c, size, R=np.eye(3)):
+    """8 corners and 6 faces (index lists) of a box centred at c with edge lengths size, rotated by R."""
+    hx, hy, hz = np.asarray(size) / 2
+    corners = np.array([[sx * hx, sy * hy, sz * hz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]) @ R.T + c
+    faces = [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]]
+    return corners, faces
+
+
+def _cyl(c, r, length, axis, n=28, R=np.eye(3)):
+    """Corners and faces of a cylinder (axis 0/1/2 = X/Y/Z of the room)."""
+    t = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    ring = np.zeros((n, 3)); o = [i for i in range(3) if i != axis]
+    ring[:, o[0]] = r * np.cos(t); ring[:, o[1]] = r * np.sin(t)
+    a = np.zeros(3); a[axis] = length / 2
+    pts = np.vstack([ring - a, ring + a]) @ R.T + c
+    faces = [[k, (k + 1) % n, n + (k + 1) % n, n + k] for k in range(n)] + [list(range(n)), list(range(2 * n - 1, n - 1, -1))]
+    return pts, faces
+
+
+class RoomView(QWidget):
+    """Treatment room in IEC fixed coordinates (X right, Y towards the gantry, Z up; isocentre at the origin):
+    linac with rotating gantry and collimator, couch with its rotation, the patient and the current beam."""
+
+    def __init__(self, state, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self.yaw, self.pitch, self.zoom = 0.75, 0.35, 1.0
+        self._drag = None
+        self._body = None
+        self.setMinimumSize(160, 140)
+        state.changed.connect(self._changed)
+
+    def _changed(self, w):
+        if w in ("image", "structures"):
+            self._body = None
+        self.update()
+
+    def _body_rings(self):
+        st = self.state
+        from skimage import measure
+        img = st.image
+        rings = []
+        for s in st.ss.structures:
+            if not s.mask.any() or not (s.type == "EXTERNAL" or s.is_target or "lung" in s.name.lower()):
+                continue
+            ks = np.where(s.mask.any(axis=(1, 2)))[0]
+            for k in ks[::max(1, len(ks) // (30 if s.type == "EXTERNAL" else 14))]:
+                for c in measure.find_contours(np.pad(s.mask[k].astype(np.float32), 1), 0.5):
+                    c = c[::max(1, len(c) // 48)] - 1
+                    rings.append((s, np.column_stack([img.origin[0] + c[:, 1] * img.spacing[0], img.origin[1] + c[:, 0] * img.spacing[1],
+                                                      np.full(len(c), img.origin[2] + k * img.spacing[2])])))
+        self._body = rings
+
+    def _proj(self):
+        cy, sy, cp_, sp_ = np.cos(self.yaw), np.sin(self.yaw), np.cos(self.pitch), np.sin(self.pitch)
+        # camera: rotate about Z (yaw), then tilt (pitch); screen x right, screen y up, depth = third row
+        Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
+        Rx = np.array([[1, 0, 0], [0, cp_, sp_], [0, -sp_, cp_]])
+        M = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]) @ Rx @ Rz      # (x, y, z) -> (screen x, screen y, depth)
+        s = min(self.width(), self.height()) / 4200.0 * self.zoom
+        W2, H2 = self.width() / 2, self.height() * 0.55
+
+        def f(pts):
+            q = np.atleast_2d(pts) @ M.T
+            return np.column_stack([W2 + q[:, 0] * s, H2 - q[:, 1] * s]), q[:, 2]
+        return f
+
+    def paintEvent(self, ev):
+        from ..core.beams import ORIENT, SAD, Frame, _rz
+        p = QPainter(self); p.fillRect(self.rect(), QColor(22, 27, 34)); p.setRenderHint(QPainter.Antialiasing)
+        st = self.state
+        f = self._proj()
+        b = cp = None
+        if st.plan and st.plan.beams:
+            b = st.plan.beam(st.cur_beam) or st.plan.beams[0]
+            cps = b.control_points(); cp = cps[min(st.cp_index, len(cps) - 1)] if b.kind == "ARC" else cps[0]
+        g = cp.gantry if cp else 0.0; coll = cp.collimator if cp else 0.0; couch = cp.couch if cp else 0.0
+        G = np.array([[np.cos(np.radians(g)), 0, np.sin(np.radians(g))], [0, 1, 0], [-np.sin(np.radians(g)), 0, np.cos(np.radians(g))]])
+        polys = []        # (depth, points2d, colour)
+
+        def add(corners, faces, col, alpha=255):
+            xy, z = f(corners)
+            for fc in faces:
+                c = QColor(*col); c.setAlpha(alpha)
+                # simple shading from the face normal
+                v = corners[fc]
+                nrm = np.cross(v[1] - v[0], v[2] - v[0]); nrm /= (np.linalg.norm(nrm) + 1e-9)
+                c = c.lighter(int(100 + 25 * abs(nrm[2]) + 10 * abs(nrm[0])))
+                polys.append((float(z[fc].mean()), xy[fc], c))
+        # floor, gantry stand, drum, arm, head and imager
+        add(*_box(np.array([0, -400, -1310]), (4000, 5000, 20)), (52, 58, 68))
+        add(*_box(np.array([0, 1750, -100]), (2200, 700, 2400)), (205, 210, 218))
+        add(*_cyl(np.array([0, 1350, 0]), 950, 120, 1, 36, G), (190, 196, 205))
+        add(*_box(np.array([0, 850, 0]) + G @ np.array([0, 0, 1120]), (560, 900, 300), G), (225, 228, 233))
+        Hc = G @ np.array([0, 0, 1180])
+        add(*_box(Hc, (620, 620, 420), G), (235, 237, 240))
+        Rc = G @ _rz(-coll)
+        add(*_cyl(G @ np.array([0, 0, 900]), 260, 160, 2, 28, Rc), (170, 178, 190))
+        add(*_box(G @ np.array([0, 0, -560]), (430, 430, 40), G), (70, 80, 96))
+        add(*_box(G @ np.array([0, 450, -560]), (90, 600, 60), G), (150, 156, 166))
+        # couch (rotates about the vertical axis through the isocentre)
+        Rcouch = _rz(couch)
+        iso = b.iso if b is not None else (np.array(st.cursor) if st.image is not None else np.zeros(3))
+        back = 0.0
+        if st.image is not None and st.ss is not None and st.ss.external() is not None:
+            ext = st.ss.external().mask
+            js = np.where(ext.any(axis=(0, 2)))[0]
+            back = st.image.origin[1] + js[-1] * st.image.spacing[1] - iso[1]
+        top = -back - 30
+        add(*_box(Rcouch @ np.array([0, -700, top]), (530, 2100, 50), Rcouch), (40, 44, 52))
+        add(*_box(np.array([0, -1300, (top - 1310) / 2]), (450, 600, max(50, top + 1290))), (180, 186, 196))
+        polys.sort(key=lambda t: t[0])
+        for _, xy, c in polys:
+            p.setPen(QPen(QColor(30, 34, 40, 160), 0.6)); p.setBrush(c)
+            p.drawPolygon(QPolygonF([QPointF(*q) for q in xy]))
+        # patient (rings), transformed patient -> room
+        if st.image is not None:
+            if self._body is None:
+                self._body_rings()
+            orient = b.orientation if b is not None else "HFS"
+            P = Rcouch @ ORIENT.get(orient, ORIENT["HFS"])
+            for s, pts in self._body:
+                xy, _ = f((pts - iso) @ P.T)
+                c = QColor(*s.color); c.setAlpha(120 if s.type == "EXTERNAL" else 200)
+                if s.type == "EXTERNAL":
+                    c = QColor(232, 196, 170, 110)
+                p.setPen(QPen(c, 1.0)); p.setBrush(Qt.NoBrush)
+                p.drawPolyline(QPolygonF([QPointF(*q) for q in xy] + [QPointF(*xy[0])]))
+        # beam from the source through the jaws
+        if cp is not None:
+            fr = Frame(cp, b.iso, b.orientation)
+            P = Rcouch @ ORIENT.get(b.orientation, ORIENT["HFS"])
+            src = fr.source @ P.T
+            far = SAD + 250
+            corners = [(fr.ray_point(np.array(u), np.array(v), np.array(far)) - b.iso) @ P.T for u, v in ((cp.x1, cp.y1), (cp.x2, cp.y1), (cp.x2, cp.y2), (cp.x1, cp.y2))]
+            xs, _ = f(np.array([src] + corners))
+            p.setPen(QPen(QColor(255, 170, 60, 220), 1.2))
+            for i in range(4):
+                p.setBrush(QColor(255, 160, 50, 45))
+                p.drawPolygon(QPolygonF([QPointF(*xs[0]), QPointF(*xs[1 + i]), QPointF(*xs[1 + (i + 1) % 4])]))
+            o, _ = f(np.zeros(3))
+            p.setPen(QPen(QColor(255, 80, 80), 2)); p.drawEllipse(QPointF(*o[0]), 3, 3)
+        # lasers through the isocentre
+        p.setPen(QPen(QColor(60, 220, 90, 150), 1))
+        for a_, b_ in (([-1800, 0, 0], [1800, 0, 0]), ([0, -2500, 0], [0, 1300, 0]), ([0, 0, -1300], [0, 0, 1300])):
+            xy, _ = f(np.array([a_, b_])); p.drawLine(QPointF(*xy[0]), QPointF(*xy[1]))
+        fnt = QFont(self.font()); fnt.setBold(True); fnt.setPointSizeF(9); p.setFont(fnt); p.setPen(QColor(232, 238, 245))
+        p.drawText(8, 16, "Room view")
+        fnt.setBold(False); p.setFont(fnt); p.setPen(QColor(255, 179, 92))
+        p.drawText(8, 31, f"Gantry {g:.1f}°  Collimator {coll:.1f}°  Couch {couch:.1f}°" + (f"  ·  {b.name} ({b.orientation})" if b else ""))
+        p.setPen(QColor(150, 162, 178)); p.drawText(8, self.height() - 8, "drag = rotate, wheel = zoom · generic linac, not a real machine")
+        p.end()
+
+    def mousePressEvent(self, ev):
+        self._drag = ev.position()
+
+    def mouseMoveEvent(self, ev):
+        if self._drag is None:
+            return
+        d = ev.position() - self._drag; self._drag = ev.position()
+        self.yaw += d.x() * 0.01; self.pitch = float(np.clip(self.pitch + d.y() * 0.01, -0.2, 1.5)); self.update()
+
+    def mouseReleaseEvent(self, ev):
+        self._drag = None
+
+    def wheelEvent(self, ev):
+        self.zoom = float(np.clip(self.zoom * (1.12 if ev.angleDelta().y() > 0 else 1 / 1.12), 0.4, 6)); self.update()
+
+
 class BeamViews(QTabWidget):
     """Fourth image area: beam's eye view and 3D model."""
 
     def __init__(self, state, parent=None):
         super().__init__(parent)
-        self.bev = BEVView(state); self.model = Model3DView(state)
-        self.addTab(self.bev, "BEV"); self.addTab(self.model, "3D")
+        self.bev = BEVView(state); self.model = Model3DView(state); self.room = RoomView(state)
+        self.addTab(self.bev, "BEV"); self.addTab(self.model, "3D"); self.addTab(self.room, "Room")
         self.setTabPosition(QTabWidget.South)
         self.setDocumentMode(True)
         self.setMinimumSize(160, 140)
