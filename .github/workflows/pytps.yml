@@ -112,12 +112,20 @@ jobs:
       - name: Portable zip
         shell: pwsh
         run: Compress-Archive -Path dist\PyTPS -DestinationPath installer_out\PyTPS_portable.zip
-      - name: Publish release pytps-latest
+      - name: Publish release (tag pytps-v<version>, marked as the latest release)
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete pytps-latest --yes --cleanup-tag 2>$null
-          $setup = (Get-ChildItem installer_out\PyTPS_Setup_v*.exe)[0].FullName
           $v = python -c "import pytps; print(pytps.__version__)"
-          gh release create pytps-latest $setup installer_out\PyTPS_portable.zip --target $env:GITHUB_SHA --prerelease --title "PyTPS $v - latest build" --notes "PyTPS $v, educational radiotherapy treatment planning system (NOT for clinical use). Setup wizard for Windows 10/11 (64-bit, no administrator rights) or the portable zip. Open source (MIT). Built from commit $env:GITHUB_SHA."
+          $tag = "pytps-v$v"
+          gh release delete pytps-latest --yes --cleanup-tag 2>$null      # old rolling pre-release
+          gh release delete $tag --yes --cleanup-tag 2>$null              # rebuild of the same version replaces it
+          $setup = (Get-ChildItem installer_out\PyTPS_Setup_v*.exe)[0].FullName
+          $notes = "PyTPS $v - educational radiotherapy treatment planning system (NOT for clinical use).`n`n" +
+                   "* PyTPS_Setup_v$v.exe - setup wizard for Windows 10/11 64-bit, no administrator rights.`n" +
+                   "* PyTPS_portable.zip - unzip and start PyTPS\PyTPS.exe.`n`n" +
+                   "Tested on the build machine before publishing: self-test of the built program, silent installation, self-test of the installed program, uninstallation.`n" +
+                   "The program is not code-signed, so Windows SmartScreen may show 'unknown publisher' (More info > Run anyway).`n`n" +
+                   "Open source (MIT). Built from commit $env:GITHUB_SHA."
+          gh release create $tag $setup installer_out\PyTPS_portable.zip --target $env:GITHUB_SHA --latest --title "PyTPS $v" --notes $notes
