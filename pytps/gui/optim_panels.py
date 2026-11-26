@@ -38,20 +38,21 @@ class ConstraintsPanel(QWidget):
                       "Serial (EUD with power k) for organs like the spinal cord; Parallel (mean organ damage) for organs like the lungs "
                       "or parotids; DVH points; Conformality for a steep dose fall-off around the target.")
         note.setWordWrap(True); note.setStyleSheet("color:#6b7785;font-size:11px"); lay.addWidget(note)
-        state.changed.connect(lambda w: self.refresh() if w in ("image", "structures", "costs") else None)
+        state.changed.connect(lambda w: self.refresh() if w in ("image", "structures", "costs", "plans") else None)
 
     def costs(self):
         st = self.state
-        if getattr(st, "costs", None) is None:
-            st.costs = default_costs(ensure_plan(st), st.ss) if st.ss else []
-        return st.costs
+        if st.ss is None:
+            return []
+        p = ensure_plan(st)
+        if not p.costs:
+            p.costs = default_costs(p, st.ss)
+        return p.costs
 
     def refresh(self):
         st = self.state
         if st.ss is None:
             return
-        if getattr(st, "_costs_for", None) is not st.ss:
-            st.costs = None; st._costs_for = st.ss
         C = self.costs()
         self._filling = True
         self.table.setRowCount(len(C))
@@ -108,7 +109,7 @@ class ConstraintsPanel(QWidget):
         st = self.state
         if st.ss is None:
             return
-        st.costs = default_costs(ensure_plan(st), st.ss); self.refresh()
+        ensure_plan(st).costs = default_costs(ensure_plan(st), st.ss); self.refresh()
 
 
 class CostPlot(QWidget):
@@ -172,6 +173,7 @@ class OptimisationPanel(QWidget):
         self.deliv.verticalHeader().hide(); self.deliv.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); self.deliv.setMaximumHeight(170)
         lay.addWidget(self.deliv)
         lay.addStretch(1)
+        state.changed.connect(lambda w: setattr(self, "opt", None) if w in ("plans", "image") else None)
 
     def settings(self):
         st = OptSettings(iterations=self.it1.value(), stage2_iterations=self.it2.value(),
@@ -188,7 +190,9 @@ class OptimisationPanel(QWidget):
         p = ensure_plan(st)
         if not any(b.mlc_mode == "optimised" for b in p.beams):
             QMessageBox.information(self, "Optimisation", "Set MLC = optimised for the beams to optimise (Planning ▸ Beams)."); return None
-        costs = getattr(st, "costs", None) or default_costs(p, st.ss); st.costs = costs
+        if not p.costs:
+            p.costs = default_costs(p, st.ss)
+        costs = p.costs
         if not any(c.on for c in costs):
             QMessageBox.information(self, "Optimisation", "Add cost functions in IMRT Constraints."); return None
         grid = 4.0 if max(b - a for a, b in st.image.extent()) < 600 else 6.0

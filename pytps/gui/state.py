@@ -24,6 +24,9 @@ class AppState(QObject):
         self.undo_stack: list = []
         self.redo_stack: list = []
         self.plan = None
+        self.plans = []                      # all plans of this patient
+        self.compare = None                  # plan compared with the current one (Evaluation)
+        self.points = []                     # (name, xyz) points of interest
         self.engine = None                   # dose engine (built on the first calculation)
         self.engine_version = None
         self.density_version = 0
@@ -56,7 +59,7 @@ class AppState(QObject):
             self.cursor = np.array([(a + b) / 2 for a, b in ext])
         self.active = tgt.name if tgt else (ss.structures[0].name if ss.structures else None)
         self.undo_stack.clear(); self.redo_stack.clear()
-        self.plan = None; self.engine = None; self.engine_version = None; self.cur_beam = None; self.cp_index = 0
+        self.plan = None; self.plans = []; self.compare = None; self.points = []; self.engine = None; self.engine_version = None; self.cur_beam = None; self.cp_index = 0
         self.changed.emit("image")
 
     def set_cursor(self, p):

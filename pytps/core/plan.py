@@ -31,6 +31,8 @@ class Plan:
     beam_dose: dict = field(default_factory=dict)      # beam name -> dose per MU (cGy) on the dose grid
     dose: np.ndarray | None = None                     # total dose (Gy) on the dose grid inside points
     version: int = 0
+    costs: list = field(default_factory=list)          # IMRT cost functions of this plan
+    kind: str = "plan"                                 # plan, sum (plan sum), imported (RT Dose)
 
     def beam(self, name):
         return next((b for b in self.beams if b.name == name), None)
@@ -144,3 +146,23 @@ def dvh(plan: Plan, eng: DoseEngine, name: str, bins=400):
     pct = lambda p: float(d[min(len(d) - 1, max(0, int((1 - p / 100) * len(d))))])
     return {"dose": axis, "volume": vol_pct, "mean": float(d.mean()), "min": float(d[0]), "max": float(d[-1]),
             "D": pct, "V": lambda x: float(100.0 * (len(d) - np.searchsorted(d, x)) / len(d)), "cc": s.volume_cc(img)}
+
+
+def dose_at(plan: Plan, eng: DoseEngine, p):
+    """Dose (Gy) of a plan at a patient point (trilinear on the dose grid)."""
+    if plan.dose is None:
+        return float("nan")
+    from scipy import ndimage
+    g = eng.grid
+    vol = g.to_volume(plan.dose)
+    c = (np.asarray(p, float) - g.origin) / g.spacing
+    return float(ndimage.map_coordinates(vol, [[c[2]], [c[1]], [c[0]]], order=1, mode="nearest")[0])
+
+
+def plan_sum(a: Plan, b: Plan, name=None) -> Plan:
+    """New plan holding the summed dose of two plans (same dose grid)."""
+    s = Plan(name or f"Sum {a.name} + {b.name}", kind="sum")
+    s.rx = Prescription(a.rx.dose + b.rx.dose, a.rx.fractions + b.rx.fractions, a.rx.target, a.rx.method)
+    s.dose = (a.dose + b.dose).astype(np.float32)
+    s.version = 1
+    return s
